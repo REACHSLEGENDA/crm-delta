@@ -23,88 +23,121 @@ export default function ChatPage() {
   const addToast = useNotificationsStore((state) => state.addToast);
 
   // States
-  const [activeChatId, setActiveChatId] = useState<string>('chan-1');
+  const [activeChatId, setActiveChatId] = useState<string>('');
   const [activeChatType, setActiveChatType] = useState<'channel' | 'dm'>('channel');
   const [inputText, setInputText] = useState('');
   
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [dms, setDms] = useState<DmItem[]>([
-    { id: '00000000-0000-0000-0000-000000000002', name: 'Ana Quintero', status: 'online', unread: 0 },
-    { id: '00000000-0000-0000-0000-000000000003', name: 'Carlos Méndez', status: 'online', unread: 1 },
-    { id: '00000000-0000-0000-0000-000000000004', name: 'Valeria Soto', status: 'ocupado', unread: 0 },
-    { id: '00000000-0000-0000-0000-000000000005', name: 'Isabel Paredes', status: 'offline', unread: 0 },
-  ]);
-
-  const [messages, setMessages] = useState<Record<string, Message[]>>({
-    'chan-1': [
-      { id: 'm1', channel_id: 'chan-1', sender_id: '00000000-0000-0000-0000-000000000002', content: 'Buenos días equipo! 🌅 Hoy arrancamos con la nueva campaña LATAM.', created_at: new Date(Date.now() - 7200000).toISOString(), reactions: {}, edited_at: null, is_system: false },
-      { id: 'm2', channel_id: 'chan-1', sender_id: '00000000-0000-0000-0000-000000000003', content: 'Excelente. Ya tenemos los nuevos creativos para WhatsApp listos.', created_at: new Date(Date.now() - 6600000).toISOString(), reactions: {}, edited_at: null, is_system: false },
-    ],
-    'chan-2': [
-      { id: 'm3', channel_id: 'chan-2', sender_id: '00000000-0000-0000-0000-000000000002', content: 'Equipo México: Hoy enfoque en los 6 leads calificados.', created_at: new Date(Date.now() - 3600000).toISOString(), reactions: {}, edited_at: null, is_system: false },
-    ]
-  });
+  const [dms, setDms] = useState<DmItem[]>([]);
+  const [messages, setMessages] = useState<Record<string, Message[]>>({});
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Fetch Channels
   useEffect(() => {
     const fetchChannels = async () => {
       const { data } = await supabase.from('channels').select('*');
-      if (data) setChannels(data);
+      if (data && data.length > 0) {
+        setChannels(data);
+        setActiveChatId(data[0].id);
+      }
     };
     fetchChannels();
   }, []);
+
+  // Fetch DMs list from profiles in the CRM
+  useEffect(() => {
+    const fetchDms = async () => {
+      const { data } = await supabase.from('profiles').select('*');
+      if (data) {
+        const activeUserId = profile?.id;
+        const otherProfiles = data
+          .filter((p: any) => p.id !== activeUserId)
+          .map((p: any) => ({
+            id: p.id,
+            name: p.full_name,
+            status: p.status || 'offline',
+            unread: 0
+          }));
+        setDms(otherProfiles);
+      }
+    };
+    if (profile) {
+      fetchDms();
+    }
+  }, [profile]);
+
+  // Fetch Messages
+  useEffect(() => {
+    const fetchMessages = async () => {
+      const { data } = await supabase
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: true });
+      if (data) {
+        const grouped: Record<string, Message[]> = {};
+        data.forEach((msg: Message) => {
+          if (!grouped[msg.channel_id]) {
+            grouped[msg.channel_id] = [];
+          }
+          grouped[msg.channel_id].push(msg);
+        });
+        setMessages(grouped);
+      }
+    };
+    fetchMessages();
+  }, [channels, dms]);
 
   useEffect(() => {
     // Scroll to bottom on active chat change or new message
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, activeChatId]);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
-    const newMessage: Message = {
-      id: crypto.randomUUID(),
+    const newMessage = {
       channel_id: activeChatId,
-      sender_id: profile?.id || '00000000-0000-0000-0000-000000000001',
+      sender_id: profile?.id || '',
       content: inputText,
       reactions: {},
-      created_at: new Date().toISOString(),
-      edited_at: null,
       is_system: false
     };
 
-    setMessages((prev) => ({
-      ...prev,
-      [activeChatId]: [...(prev[activeChatId] || []), newMessage]
-    }));
+    const { data } = await supabase.from('messages').insert(newMessage);
+    if (data && data[0]) {
+      setMessages((prev) => ({
+        ...prev,
+        [activeChatId]: [...(prev[activeChatId] || []), data[0]]
+      }));
+    }
 
     setInputText('');
 
     // Trigger mock auto-reply for DMs
     if (activeChatType === 'dm') {
-      setTimeout(() => {
+      setTimeout(async () => {
         const dmAgent = dms.find((d) => d.id === activeChatId);
         if (dmAgent) {
-          const autoReply: Message = {
-            id: crypto.randomUUID(),
+          const autoReply = {
             channel_id: activeChatId,
             sender_id: dmAgent.id,
             content: 'Recibido, te respondo en un momento 👍. Estoy revisando el pipeline.',
             reactions: {},
-            created_at: new Date().toISOString(),
-            edited_at: null,
             is_system: false
           };
-          setMessages((prev) => ({
-            ...prev,
-            [activeChatId]: [...(prev[activeChatId] || []), autoReply]
-          }));
-          addToast({
-            title: `Mensaje de ${dmAgent.name}`,
-            description: 'Recibiste una nueva respuesta.',
-            type: 'info',
-          });
+          const { data: repData } = await supabase.from('messages').insert(autoReply);
+          if (repData && repData[0]) {
+            setMessages((prev) => ({
+              ...prev,
+              [activeChatId]: [...(prev[activeChatId] || []), repData[0]]
+            }));
+            addToast({
+              title: `Mensaje de ${dmAgent.name}`,
+              description: 'Recibiste una nueva respuesta.',
+              type: 'info',
+            });
+          }
         }
       }, 1500);
     }
@@ -114,9 +147,9 @@ export default function ChatPage() {
     if (id === profile?.id) return 'Tú';
     const found = dms.find((d) => d.id === id);
     if (found) return found.name;
-    if (id === '00000000-0000-0000-0000-000000000001') return 'Diego Ramírez';
     return 'Sistema';
   };
+
 
   const activeChatTitle = () => {
     if (activeChatType === 'channel') {
@@ -240,7 +273,7 @@ export default function ChatPage() {
         {/* Message List */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {(messages[activeChatId] || []).map((msg) => {
-            const isMine = msg.sender_id === profile?.id || msg.sender_id === '00000000-0000-0000-0000-000000000001';
+            const isMine = msg.sender_id === profile?.id;
             return (
               <div key={msg.id} className={`flex gap-3 max-w-[70%] ${isMine ? 'ml-auto flex-row-reverse' : ''}`}>
                 <Avatar name={getSenderName(msg.sender_id)} size="sm" />
