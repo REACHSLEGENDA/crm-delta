@@ -34,10 +34,17 @@ export default function DashboardPage() {
   const [activities, setActivities] = useState<any[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
 
+  // Chart States
+  const [funnelData, setFunnelData] = useState<any[]>([]);
+  const [conversionData, setConversionData] = useState<any[]>([]);
+  const [sourcesData, setSourcesData] = useState<any[]>([]);
+  const [countriesData, setCountriesData] = useState<any[]>([]);
+  const [temperatureData, setTemperatureData] = useState<any[]>([]);
+
   // Initialize and fetch data
   useEffect(() => {
     const fetchData = async () => {
-      // Fetch Leads count
+      // Fetch Leads
       const { data: leads } = await supabase.from('leads').select('*');
       const leadsCount = leads?.length || 0;
 
@@ -65,6 +72,85 @@ export default function DashboardPage() {
       // Fetch activities
       const { data: acts } = await supabase.from('activities').select('*').order('created_at', { ascending: false });
       setActivities(acts?.slice(0, 5) || []);
+
+      // 1. Calculate funnel stages dynamically
+      const countContacted = leads?.filter((l: any) => l.status === 'Contactado').length || 0;
+      const countCalificado = leads?.filter((l: any) => l.status === 'Calificado').length || 0;
+      const countInterested = deals?.filter((d: any) => d.stage === 'int').length || 0;
+      const countDemo = deals?.filter((d: any) => d.stage === 'demo').length || 0;
+      const countWon = deals?.filter((d: any) => d.stage === 'won').length || 0;
+
+      const dynamicFunnel = [
+        { name: 'Total Leads', cantidad: leadsCount, fill: '#64748B' },
+        { name: 'Contactados', cantidad: countContacted, fill: '#A78BFA' },
+        { name: 'Calificados', cantidad: countCalificado, fill: '#818CF8' },
+        { name: 'Interesados', cantidad: countInterested, fill: '#E91E8C' },
+        { name: 'Demos / Presentación', cantidad: countDemo, fill: '#F59E0B' },
+        { name: 'Depósito / Ganados', cantidad: countWon, fill: '#22C55E' },
+      ];
+      setFunnelData(dynamicFunnel);
+
+      // 2. Weekly conversion/revenue trend dynamically
+      const weeklyTrend = [
+        { name: 'Sem 1', Conversiones: 0, Revenue: 0 },
+        { name: 'Sem 2', Conversiones: 0, Revenue: 0 },
+        { name: 'Sem 3', Conversiones: 0, Revenue: 0 },
+        { name: 'Sem 4', Conversiones: 0, Revenue: 0 },
+      ];
+      deals?.forEach((deal: any) => {
+        const dealDate = new Date(deal.created_at || Date.now());
+        const diffDays = Math.floor((Date.now() - dealDate.getTime()) / (1000 * 60 * 60 * 24));
+        const weekIdx = Math.floor(diffDays / 7);
+        if (weekIdx >= 0 && weekIdx < 4) {
+          const targetIdx = 3 - weekIdx;
+          if (deal.stage === 'won') {
+            weeklyTrend[targetIdx].Conversiones += 1;
+            weeklyTrend[targetIdx].Revenue += Number(deal.amount || 0) / 1000; // in thousands
+          }
+        }
+      });
+      setConversionData(weeklyTrend);
+
+      // 3. Lead Sources dynamically
+      const sourcesCount: Record<string, number> = { WhatsApp: 0, Web: 0, Referido: 0, Llamada: 0 };
+      leads?.forEach((l: any) => {
+        if (sourcesCount[l.source] !== undefined) {
+          sourcesCount[l.source]++;
+        }
+      });
+      const dynamicSources = Object.keys(sourcesCount).map(key => ({
+        name: key,
+        Cantidad: sourcesCount[key],
+        fill: key === 'WhatsApp' ? '#22C55E' : key === 'Web' ? '#00E5CC' : key === 'Referido' ? '#A78BFA' : '#F59E0B'
+      }));
+      setSourcesData(dynamicSources);
+
+      // 4. Countries dynamically
+      const countriesCount: Record<string, number> = {};
+      leads?.forEach((l: any) => {
+        if (l.country) {
+          countriesCount[l.country] = (countriesCount[l.country] || 0) + 1;
+        }
+      });
+      const dynamicCountries = Object.keys(countriesCount)
+        .map(key => ({ name: key, Cantidad: countriesCount[key] }))
+        .sort((a, b) => b.Cantidad - a.Cantidad)
+        .slice(0, 5);
+      setCountriesData(dynamicCountries);
+
+      // 5. Pipeline Temperature dynamically
+      const tempCount: Record<string, number> = { cold: 0, warm: 0, hot: 0 };
+      deals?.forEach((d: any) => {
+        if (tempCount[d.temperature] !== undefined) {
+          tempCount[d.temperature]++;
+        }
+      });
+      const dynamicTemp = [
+        { name: 'Frío (Cold)', Cantidad: tempCount.cold, fill: '#64748B' },
+        { name: 'Templado (Warm)', Cantidad: tempCount.warm, fill: '#F59E0B' },
+        { name: 'Caliente (Hot)', Cantidad: tempCount.hot, fill: '#E91E8C' }
+      ];
+      setTemperatureData(dynamicTemp);
     };
 
     fetchData();
@@ -96,24 +182,6 @@ export default function DashboardPage() {
       type: 'success',
     });
   };
-
-  // Funnel data
-  const funnelData = [
-    { name: 'Leads', cantidad: kpis.totalLeads, fill: '#64748B' },
-    { name: 'Contacto', cantidad: Math.ceil(kpis.totalLeads * 0.75), fill: '#A78BFA' },
-    { name: 'Interesado', cantidad: Math.ceil(kpis.totalLeads * 0.55), fill: '#E91E8C' },
-    { name: 'Demo', cantidad: Math.ceil(kpis.totalLeads * 0.35), fill: '#F59E0B' },
-    { name: 'Depósito', cantidad: kpis.activeDeals, fill: '#00E5CC' },
-    { name: 'Ganado', cantidad: Math.ceil(kpis.totalLeads * 0.12), fill: '#22C55E' },
-  ];
-
-  // Line chart conversions
-  const conversionData = [
-    { name: 'Sem 1', Conversiones: 4, Revenue: 15 },
-    { name: 'Sem 2', Conversiones: 8, Revenue: 34 },
-    { name: 'Sem 3', Conversiones: 14, Revenue: 78 },
-    { name: 'Sem 4', Conversiones: 22, Revenue: 184 },
-  ];
 
   return (
     <div className="space-y-6 select-none animate-fade-in">
@@ -169,30 +237,36 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Charts Grid */}
+      {/* Charts Grid 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Funnel Chart */}
         <div className="bg-[#0F1525]/40 border border-kovex-border rounded-2xl p-5 backdrop-blur-md">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-display font-bold text-white text-sm">Embudo de Ventas</h3>
-            <span className="text-[10px] text-kovex-muted uppercase font-bold tracking-wider">Últimos 30 días</span>
+            <h3 className="font-display font-bold text-white text-sm">Embudo de Ventas (Dinámico)</h3>
+            <span className="text-[10px] text-kovex-muted uppercase font-bold tracking-wider">Flujo de Conversión</span>
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                layout="vertical"
-                data={funnelData}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-              >
-                <XAxis type="number" stroke="#64748B" fontSize={10} hide />
-                <YAxis dataKey="name" type="category" stroke="#64748B" fontSize={10} axisLine={false} tickLine={false} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1A2035', borderColor: 'rgba(255,255,255,0.06)', borderRadius: '8px' }}
-                  labelStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
-                />
-                <Bar dataKey="cantidad" radius={[0, 4, 4, 0]} barSize={20} />
-              </BarChart>
-            </ResponsiveContainer>
+            {kpis.totalLeads === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-kovex-muted">
+                Sin datos suficientes para mostrar el embudo.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  layout="vertical"
+                  data={funnelData}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <XAxis type="number" stroke="#64748B" fontSize={10} hide />
+                  <YAxis dataKey="name" type="category" stroke="#64748B" fontSize={10} axisLine={false} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#1A2035', borderColor: 'rgba(255,255,255,0.06)', borderRadius: '8px' }}
+                    labelStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                  />
+                  <Bar dataKey="cantidad" radius={[0, 4, 4, 0]} barSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -200,7 +274,7 @@ export default function DashboardPage() {
         <div className="bg-[#0F1525]/40 border border-kovex-border rounded-2xl p-5 backdrop-blur-md">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-display font-bold text-white text-sm">Crecimiento y Rendimiento</h3>
-            <span className="text-[10px] text-kovex-muted uppercase font-bold tracking-wider">Por Semana</span>
+            <span className="text-[10px] text-kovex-muted uppercase font-bold tracking-wider">Historial Mensual</span>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -211,10 +285,85 @@ export default function DashboardPage() {
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1A2035', borderColor: 'rgba(255,255,255,0.06)', borderRadius: '8px' }}
                 />
-                <Line type="monotone" dataKey="Conversiones" stroke="#E91E8C" strokeWidth={2} activeDot={{ r: 6 }} />
-                <Line type="monotone" dataKey="Revenue" stroke="#00E5CC" strokeWidth={2} />
+                <Line type="monotone" name="Conversiones" dataKey="Conversiones" stroke="#E91E8C" strokeWidth={2} activeDot={{ r: 6 }} />
+                <Line type="monotone" name="Revenue ($K)" dataKey="Revenue" stroke="#00E5CC" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Charts Grid 2 - Broker Specific Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Lead Sources */}
+        <div className="bg-[#0F1525]/40 border border-kovex-border rounded-2xl p-5 backdrop-blur-md">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-display font-bold text-white text-sm">Distribución por Origen</h3>
+            <span className="text-[10px] text-kovex-muted uppercase font-bold tracking-wider">Campaña</span>
+          </div>
+          <div className="h-48">
+            {kpis.totalLeads === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-kovex-muted">
+                Sin datos de leads
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={sourcesData}>
+                  <XAxis dataKey="name" stroke="#64748B" fontSize={9} axisLine={false} tickLine={false} />
+                  <YAxis stroke="#64748B" fontSize={9} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1A2035', borderColor: 'rgba(255,255,255,0.06)', borderRadius: '8px' }} />
+                  <Bar dataKey="Cantidad" radius={[4, 4, 0, 0]} barSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Pipeline Temperature */}
+        <div className="bg-[#0F1525]/40 border border-kovex-border rounded-2xl p-5 backdrop-blur-md">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-display font-bold text-white text-sm">Temperatura del Trato</h3>
+            <span className="text-[10px] text-kovex-muted uppercase font-bold tracking-wider">Intención</span>
+          </div>
+          <div className="h-48">
+            {kpis.activeDeals === 0 && funnelData.find(f => f.name === 'Depósito / Ganados')?.cantidad === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-kovex-muted">
+                Sin negocios activos
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={temperatureData} layout="vertical">
+                  <XAxis type="number" stroke="#64748B" fontSize={9} hide />
+                  <YAxis dataKey="name" type="category" stroke="#64748B" fontSize={9} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1A2035', borderColor: 'rgba(255,255,255,0.06)', borderRadius: '8px' }} />
+                  <Bar dataKey="Cantidad" radius={[0, 4, 4, 0]} barSize={14} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Top Countries */}
+        <div className="bg-[#0F1525]/40 border border-kovex-border rounded-2xl p-5 backdrop-blur-md">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-display font-bold text-white text-sm">Top Países (Región)</h3>
+            <span className="text-[10px] text-kovex-muted uppercase font-bold tracking-wider">Traders</span>
+          </div>
+          <div className="h-48">
+            {countriesData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-kovex-muted">
+                Sin datos geográficos
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={countriesData}>
+                  <XAxis dataKey="name" stroke="#64748B" fontSize={9} axisLine={false} tickLine={false} />
+                  <YAxis stroke="#64748B" fontSize={9} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1A2035', borderColor: 'rgba(255,255,255,0.06)', borderRadius: '8px' }} />
+                  <Bar dataKey="Cantidad" fill="#A78BFA" radius={[4, 4, 0, 0]} barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
