@@ -26,9 +26,7 @@ const MOCK_DEALS: any[] = [];
 
 const MOCK_CONTACTS: any[] = [];
 
-const MOCK_ACTIVITIES: any[] = [
-  { id: 'act-1', entity_type: 'system', entity_id: '00000000-0000-0000-0000-000000000001', type: 'system', description: 'Sistema inicializado.', created_by: null, created_at: new Date().toISOString() }
-];
+const MOCK_ACTIVITIES: any[] = [];
 
 const MOCK_AUTOMATIONS: any[] = [];
 
@@ -57,16 +55,16 @@ const getOrSetLocal = (key: string, seed: any) => {
 // Ensure all data structures are loaded
 const initializeLocalDb = () => {
   if (typeof window === 'undefined') return;
-  getOrSetLocal('kovex_profiles', MOCK_PROFILES);
-  getOrSetLocal('kovex_leads', MOCK_LEADS);
-  getOrSetLocal('kovex_deals', MOCK_DEALS);
-  getOrSetLocal('kovex_contacts', MOCK_CONTACTS);
-  getOrSetLocal('kovex_activities', MOCK_ACTIVITIES);
-  getOrSetLocal('kovex_automations', MOCK_AUTOMATIONS);
-  getOrSetLocal('kovex_rules', MOCK_RULES);
-  getOrSetLocal('kovex_channels', MOCK_CHANNELS);
-  getOrSetLocal('kovex_messages', MOCK_MESSAGES);
-  getOrSetLocal('kovex_calls', MOCK_CALLS);
+  getOrSetLocal('kovex_v3_profiles', MOCK_PROFILES);
+  getOrSetLocal('kovex_v3_leads', MOCK_LEADS);
+  getOrSetLocal('kovex_v3_deals', MOCK_DEALS);
+  getOrSetLocal('kovex_v3_contacts', MOCK_CONTACTS);
+  getOrSetLocal('kovex_v3_activities', MOCK_ACTIVITIES);
+  getOrSetLocal('kovex_v3_automations', MOCK_AUTOMATIONS);
+  getOrSetLocal('kovex_v3_rules', MOCK_RULES);
+  getOrSetLocal('kovex_v3_channels', MOCK_CHANNELS);
+  getOrSetLocal('kovex_v3_messages', MOCK_MESSAGES);
+  getOrSetLocal('kovex_v3_calls', MOCK_CALLS);
 };
 
 initializeLocalDb();
@@ -122,14 +120,14 @@ const mockSupabase = {
     }
   },
   from: (table: string) => {
-    const key = `kovex_${table}`;
+    const key = `kovex_v3_${table}`;
     return {
       select: (columns = '*') => {
         const data = getCollection(key);
         
         // Handle join simulated references
         if (table === 'deals') {
-          const leads = getCollection('kovex_leads');
+          const leads = getCollection('kovex_v3_leads');
           data.forEach((deal: any) => {
             deal.lead = leads.find((l: any) => l.id === deal.lead_id);
           });
@@ -170,7 +168,7 @@ const mockSupabase = {
         // Log activity automatically
         if (table !== 'activities') {
           const session = JSON.parse(localStorage.getItem('kovex_session') || '{}');
-          const acts = getCollection('kovex_activities');
+          const acts = getCollection('kovex_v3_activities');
           acts.unshift({
             id: crypto.randomUUID(),
             entity_type: table.replace(/s$/, ''),
@@ -180,7 +178,7 @@ const mockSupabase = {
             created_by: session.user?.id || null,
             created_at: new Date().toISOString()
           });
-          saveCollection('kovex_activities', acts);
+          saveCollection('kovex_v3_activities', acts);
         }
         
         return mockResponse([newRecord]);
@@ -202,7 +200,7 @@ const mockSupabase = {
             // Log activity
             if (table !== 'activities' && updatedRecord) {
               const session = JSON.parse(localStorage.getItem('kovex_session') || '{}');
-              const acts = getCollection('kovex_activities');
+              const acts = getCollection('kovex_v3_activities');
               acts.unshift({
                 id: crypto.randomUUID(),
                 entity_type: table.replace(/s$/, ''),
@@ -212,7 +210,7 @@ const mockSupabase = {
                 created_by: session.user?.id || null,
                 created_at: new Date().toISOString()
               });
-              saveCollection('kovex_activities', acts);
+              saveCollection('kovex_v3_activities', acts);
             }
             
             return mockResponse(updatedRecord ? [updatedRecord] : []);
