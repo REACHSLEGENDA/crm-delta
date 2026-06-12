@@ -84,7 +84,7 @@ const saveCollection = (key: string, data: any) => localStorage.setItem(key, JSO
 const mockSupabase = {
   auth: {
     signInWithPassword: ({ email, password }: any) => {
-      const users = [
+      const defaultUsers = [
         { email: 'kovex.net@gmail.com', password: '@Kovex3412s', role: 'SUPERADMIN', name: 'Kovex Admin', id: 'f82fb25d-c6e1-4e16-ad4d-ed3813359800' },
         { email: 'superadmin@kovex.net', password: 'Kovex2025!', role: 'SUPERADMIN', name: 'Diego Ramírez', id: '00000000-0000-0000-0000-000000000001' },
         { email: 'manager@kovex.net', password: 'Kovex2025!', role: 'MANAGER', name: 'Ana Quintero', id: '00000000-0000-0000-0000-000000000002' },
@@ -92,6 +92,9 @@ const mockSupabase = {
         { email: 'agente2@kovex.net', password: 'Kovex2025!', role: 'AGENTE', name: 'Valeria Soto', id: '00000000-0000-0000-0000-000000000004' },
         { email: 'supervisor@kovex.net', password: 'Kovex2025!', role: 'SUPERVISOR', name: 'Isabel Paredes', id: '00000000-0000-0000-0000-000000000005' },
       ];
+      
+      const registeredUsers = getCollection('kovex_v4_mock_users') || [];
+      const users = [...defaultUsers, ...registeredUsers];
       
       const found = users.find(u => u.email === email);
       if (found && password === found.password) {
@@ -107,6 +110,41 @@ const mockSupabase = {
         return Promise.resolve({ data: { user: session.user, session }, error: null });
       }
       return Promise.resolve({ data: { user: null, session: null }, error: { message: 'Credenciales incorrectas' } });
+    },
+    signUp: ({ email, password, options }: any) => {
+      const usersKey = 'kovex_v4_mock_users';
+      const users = getCollection(usersKey) || [];
+      
+      if (users.some((u: any) => u.email === email)) {
+        return Promise.resolve({ data: { user: null, session: null }, error: { message: 'El usuario ya existe.' } });
+      }
+      
+      const id = crypto.randomUUID();
+      const role = options?.data?.role || 'AGENTE';
+      const name = options?.data?.full_name || email;
+      const newUser = { email, password, role, name, id };
+      
+      users.push(newUser);
+      saveCollection(usersKey, users);
+
+      // Create a profile in mock storage
+      const profiles = getCollection('kovex_v4_profiles');
+      profiles.push({
+        id,
+        full_name: name,
+        role,
+        status: 'online',
+        avatar_url: null
+      });
+      saveCollection('kovex_v4_profiles', profiles);
+
+      return Promise.resolve({
+        data: {
+          user: { id, email, user_metadata: { full_name: name, role } },
+          session: null
+        },
+        error: null
+      });
     },
     signOut: () => {
       localStorage.removeItem('kovex_session');

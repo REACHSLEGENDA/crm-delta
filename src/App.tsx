@@ -2,6 +2,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from '@/auth/LoginPage';
+import RegisterPage from '@/auth/RegisterPage';
 import ProtectedRoute from '@/auth/ProtectedRoute';
 import AppLayout from '@/layouts/AppLayout';
 import DashboardPage from '@/modules/dashboard/DashboardPage';
@@ -21,6 +22,7 @@ export default function App() {
       <Routes>
         {/* PUBLIC ROUTES */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register-kovex-internal" element={<RegisterPage />} />
 
         {/* PROTECTED ROUTES */}
         <Route element={<ProtectedRoute />}>
