@@ -1,6 +1,6 @@
 // modules/admin/UsersPage.tsx
 import React, { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, isRealSupabase } from '@/lib/supabase';
 import { Profile, UserRole } from '@/types';
 import Avatar from '@/components/shared/Avatar';
 import Badge from '@/components/shared/Badge';
@@ -9,7 +9,7 @@ import { useNotificationsStore } from '@/store/notificationsStore';
 import { usePermissions } from '@/hooks/usePermissions';
 import { 
   UserPlus, Mail, ShieldAlert, Key, Ban, 
-  Check, X, Settings2, Trash2, Lock 
+  Check, X, Settings2, Trash2, Lock, User, Loader2 
 } from 'lucide-react';
 
 export default function UsersPage() {
@@ -35,8 +35,11 @@ export default function UsersPage() {
   
   // Modals state
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteFullName, setInviteFullName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('AGENTE');
+  const [submitting, setSubmitting] = useState(false);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<() => void>(() => {});
@@ -113,31 +116,87 @@ export default function UsersPage() {
   };
 
   const handleInviteUser = async () => {
-    if (!inviteEmail.trim()) {
-      alert('Ingresa el correo del invitado');
+    if (!inviteFullName.trim() || !inviteEmail.trim() || !invitePassword.trim()) {
+      addToast({
+        title: 'Campos incompletos',
+        description: 'Por favor, llena todos los campos.',
+        type: 'warning',
+      });
       return;
     }
     
+    setSubmitting(true);
     try {
-      const newProfile = {
-        id: crypto.randomUUID(),
-        full_name: inviteEmail.split('@')[0],
-        avatar_url: null,
-        role: inviteRole,
-        status: 'online' as const
-      };
+      let authErr: any = null;
       
-      await supabase.from('profiles').insert(newProfile);
-      setUsers([newProfile, ...users]);
+      if (isRealSupabase) {
+        // Create secondary client without persisting session so admin remains signed in
+        const { createClient } = await import('@supabase/supabase-js');
+        const tempClient = createClient(
+          import.meta.env.VITE_SUPABASE_URL || '',
+          import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+          {
+            auth: {
+              persistSession: false,
+              autoRefreshToken: false,
+            }
+          }
+        );
+        const { error } = await tempClient.auth.signUp({
+          email: inviteEmail,
+          password: invitePassword,
+          options: {
+            data: {
+              full_name: inviteFullName,
+              role: inviteRole,
+            }
+          }
+        });
+        authErr = error;
+      } else {
+        const { error } = await supabase.auth.signUp({
+          email: inviteEmail,
+          password: invitePassword,
+          options: {
+            data: {
+              full_name: inviteFullName,
+              role: inviteRole,
+            }
+          }
+        });
+        authErr = error;
+      }
+
+      if (authErr) {
+        addToast({
+          title: 'Error al añadir',
+          description: authErr.message,
+          type: 'error',
+        });
+      } else {
+        // Wait briefly for trigger/db sync in real mode, then fetch profiles
+        setTimeout(async () => {
+          await fetchUsers();
+        }, 1200);
+
+        addToast({
+          title: 'Usuario Añadido',
+          description: `Se registró a ${inviteFullName} (${inviteRole}) con éxito.`,
+          type: 'success',
+        });
+        setInviteOpen(false);
+        setInviteFullName('');
+        setInviteEmail('');
+        setInvitePassword('');
+      }
+    } catch (err: any) {
       addToast({
-        title: 'Invitación enviada',
-        description: `Se invitó a ${inviteEmail} con el rol de ${inviteRole}.`,
-        type: 'success',
+        title: 'Error inesperado',
+        description: err.message,
+        type: 'error',
       });
-      setInviteOpen(false);
-      setInviteEmail('');
-    } catch (err) {
-      console.error(err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -164,7 +223,7 @@ export default function UsersPage() {
           onClick={() => setInviteOpen(true)}
           className="flex items-center gap-2 bg-kovex-primary hover:brightness-105 active:scale-[0.98] text-xs font-bold px-4 py-2.5 rounded-xl text-white transition-all shadow-lg"
         >
-          <UserPlus size={14} /> Invitar Usuario
+          <UserPlus size={14} /> Añadir Usuario
         </button>
       </div>
 
@@ -200,7 +259,7 @@ export default function UsersPage() {
                         <span className="font-bold text-sm text-white">{user.full_name}</span>
                       </div>
                     </td>
-                    <td className="p-4 text-xs text-kovex-muted">{user.full_name.toLowerCase().replace(' ', '.') + '@kovex.net'}</td>
+                    <td className="p-4 text-xs text-kovex-muted font-mono">{user.email || (user.full_name.toLowerCase().replace(' ', '.') + '@kovex.net')}</td>
                     <td className="p-4">
                       <select
                         value={user.role}
@@ -230,7 +289,7 @@ export default function UsersPage() {
                         </button>
                         {/* Reset password */}
                         <button
-                          onClick={() => handleResetPassword(user.full_name.toLowerCase().replace(' ', '.') + '@kovex.net')}
+                          onClick={() => handleResetPassword(user.email || (user.full_name.toLowerCase().replace(' ', '.') + '@kovex.net'))}
                           title="Enviar Reset de Contraseña"
                           className="p-1.5 bg-kovex-surface border border-kovex-border hover:border-kovex-accent/45 rounded-lg text-kovex-muted hover:text-white transition-all"
                         >
@@ -246,13 +305,27 @@ export default function UsersPage() {
         </table>
       </div>
 
-      {/* INVITE USER MODAL */}
+      {/* ADD USER MODAL */}
       <Modal
         isOpen={inviteOpen}
         onClose={() => setInviteOpen(false)}
-        title="Invitar Nuevo Colaborador"
+        title="Añadir Nuevo Colaborador"
       >
         <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-kovex-muted uppercase tracking-wider mb-2">Nombre Completo</label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-kovex-muted"><User size={16} /></span>
+              <input
+                type="text"
+                placeholder="ej. Carlos Méndez"
+                value={inviteFullName}
+                onChange={(e) => setInviteFullName(e.target.value)}
+                className="w-full bg-kovex-bg border border-kovex-border focus:border-kovex-primary/50 text-white rounded-xl py-3 pl-10 pr-4 text-sm outline-none transition-all"
+              />
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-kovex-muted uppercase tracking-wider mb-2">Correo corporativo</label>
             <div className="relative">
@@ -268,11 +341,25 @@ export default function UsersPage() {
           </div>
 
           <div>
+            <label className="block text-xs font-semibold text-kovex-muted uppercase tracking-wider mb-2">Contraseña Temporal</label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-kovex-muted"><Lock size={16} /></span>
+              <input
+                type="text"
+                placeholder="Mínimo 6 caracteres"
+                value={invitePassword}
+                onChange={(e) => setInvitePassword(e.target.value)}
+                className="w-full bg-kovex-bg border border-kovex-border focus:border-kovex-primary/50 text-white rounded-xl py-3 pl-10 pr-4 text-sm outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          <div>
             <label className="block text-xs font-semibold text-kovex-muted uppercase tracking-wider mb-2">Rol de la cuenta</label>
             <select
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value as UserRole)}
-              className="w-full bg-kovex-bg border border-kovex-border text-white text-sm rounded-xl p-3 outline-none focus:border-kovex-primary/40"
+              className="w-full bg-kovex-bg border border-kovex-border text-white text-sm rounded-xl p-3 outline-none focus:border-kovex-primary/40 cursor-pointer"
             >
               <option value="SUPERADMIN">SUPERADMIN — Acceso total y config de sistema</option>
               <option value="MANAGER">MANAGER — Control de flujos, reglas y reportes</option>
@@ -284,15 +371,23 @@ export default function UsersPage() {
           <div className="pt-4 border-t border-kovex-border flex justify-end gap-3">
             <button
               onClick={() => setInviteOpen(false)}
-              className="px-4 py-2 border border-kovex-border hover:bg-white/[0.02] text-xs font-semibold rounded-xl text-white transition-colors"
+              disabled={submitting}
+              className="px-4 py-2 border border-kovex-border hover:bg-white/[0.02] text-xs font-semibold rounded-xl text-white transition-colors animate-fade-in"
             >
               Cancelar
             </button>
             <button
               onClick={handleInviteUser}
-              className="px-4 py-2 bg-kovex-primary hover:brightness-105 active:scale-[0.98] text-xs font-bold rounded-xl text-white transition-all shadow-lg shadow-kovex-primary/10"
+              disabled={submitting}
+              className="px-4 py-2 bg-kovex-primary hover:brightness-105 active:scale-[0.98] text-xs font-bold rounded-xl text-white transition-all shadow-lg shadow-kovex-primary/10 flex items-center gap-2"
             >
-              Enviar Invitación
+              {submitting ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" /> Guardando...
+                </>
+              ) : (
+                'Añadir Usuario'
+              )}
             </button>
           </div>
         </div>

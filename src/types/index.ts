@@ -10,6 +10,7 @@ export interface Profile {
   status: 'online' | 'ausente' | 'ocupado' | 'offline';
   last_seen?: string;
   team_id?: string | null;
+  email?: string;
 }
 
 export interface Lead {
