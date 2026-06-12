@@ -156,18 +156,15 @@ export default function DashboardPage() {
     fetchData();
 
     // Default Today's Tasks
-    const localTasks = localStorage.getItem('kovex_tasks');
+    const localTasks = localStorage.getItem('kovex_tasks_v4');
     if (localTasks) {
       setTasks(JSON.parse(localTasks));
     } else {
       const defaultTasks = [
-        { id: '1', title: 'Llamar a Juan Manuel Acosta · seguimiento depósito', meta: '10:00 · Alta', done: false },
-        { id: '2', title: 'Demo virtual con Mariana Velázquez', meta: '12:30 · Hoy', done: false },
-        { id: '3', title: 'Revisar pipeline MX con Ana Q.', meta: '16:00 · 1:1', done: false },
-        { id: '4', title: 'Aprobar campaña WhatsApp LATAM', meta: '17:00', done: false },
-        { id: '5', title: 'Cerrar reporte semanal', meta: '18:00', done: false },
+        { id: '1', title: 'Completar perfil de usuario', meta: 'Sistema · Pendiente', done: false },
+        { id: '2', title: 'Revisar prospectos asignados', meta: 'Diario', done: false },
       ];
-      localStorage.setItem('kovex_tasks', JSON.stringify(defaultTasks));
+      localStorage.setItem('kovex_tasks_v4', JSON.stringify(defaultTasks));
       setTasks(defaultTasks);
     }
   }, []);

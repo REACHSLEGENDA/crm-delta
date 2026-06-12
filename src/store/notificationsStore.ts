@@ -30,11 +30,7 @@ interface NotificationsState {
 
 export const useNotificationsStore = create<NotificationsState>((set) => ({
   toasts: [],
-  notifications: [
-    { id: '1', title: 'Nuevo Lead Asignado', description: 'Mariana Velázquez ingresó por WhatsApp y te fue asignada.', time: 'Hace 5m', read: false, type: 'lead' },
-    { id: '2', title: 'Cambio de Etapa', description: 'Federico Sandoval se movió a Depósito Pendiente.', time: 'Hace 1h', read: false, type: 'deal' },
-    { id: '3', title: 'Mención en Chat', description: 'Ana Quintero te mencionó en #ventas-mx.', time: 'Hace 2h', read: true, type: 'chat' },
-  ],
+  notifications: [],
 
   addToast: (toast) => {
     const id = crypto.randomUUID();

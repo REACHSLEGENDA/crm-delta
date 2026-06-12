@@ -29,8 +29,8 @@ export default function LoginPage() {
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFields>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: 'superadmin@kovex.net',
-      password: 'Kovex2025!',
+      email: 'kovex.net@gmail.com',
+      password: '@Kovex3412s',
       remember: true,
     }
   });

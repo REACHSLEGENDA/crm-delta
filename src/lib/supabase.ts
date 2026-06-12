@@ -14,6 +14,7 @@ const isRealSupabase =
 
 // Mock Data Initial Seeds
 const MOCK_PROFILES = [
+  { id: 'f82fb25d-c6e1-4e16-ad4d-ed3813359800', full_name: 'Kovex Admin', role: 'SUPERADMIN', status: 'online', avatar_url: null },
   { id: '00000000-0000-0000-0000-000000000001', full_name: 'Diego Ramírez', role: 'SUPERADMIN', status: 'online', avatar_url: null },
   { id: '00000000-0000-0000-0000-000000000002', full_name: 'Ana Quintero', role: 'MANAGER', status: 'online', avatar_url: null },
   { id: '00000000-0000-0000-0000-000000000003', full_name: 'Carlos Méndez', role: 'AGENTE', status: 'online', avatar_url: null },
@@ -56,16 +57,16 @@ const getOrSetLocal = (key: string, seed: any) => {
 // Ensure all data structures are loaded
 const initializeLocalDb = () => {
   if (typeof window === 'undefined') return;
-  getOrSetLocal('kovex_v3_profiles', MOCK_PROFILES);
-  getOrSetLocal('kovex_v3_leads', MOCK_LEADS);
-  getOrSetLocal('kovex_v3_deals', MOCK_DEALS);
-  getOrSetLocal('kovex_v3_contacts', MOCK_CONTACTS);
-  getOrSetLocal('kovex_v3_activities', MOCK_ACTIVITIES);
-  getOrSetLocal('kovex_v3_automations', MOCK_AUTOMATIONS);
-  getOrSetLocal('kovex_v3_rules', MOCK_RULES);
-  getOrSetLocal('kovex_v3_channels', MOCK_CHANNELS);
-  getOrSetLocal('kovex_v3_messages', MOCK_MESSAGES);
-  getOrSetLocal('kovex_v3_calls', MOCK_CALLS);
+  getOrSetLocal('kovex_v4_profiles', MOCK_PROFILES);
+  getOrSetLocal('kovex_v4_leads', MOCK_LEADS);
+  getOrSetLocal('kovex_v4_deals', MOCK_DEALS);
+  getOrSetLocal('kovex_v4_contacts', MOCK_CONTACTS);
+  getOrSetLocal('kovex_v4_activities', MOCK_ACTIVITIES);
+  getOrSetLocal('kovex_v4_automations', MOCK_AUTOMATIONS);
+  getOrSetLocal('kovex_v4_rules', MOCK_RULES);
+  getOrSetLocal('kovex_v4_channels', MOCK_CHANNELS);
+  getOrSetLocal('kovex_v4_messages', MOCK_MESSAGES);
+  getOrSetLocal('kovex_v4_calls', MOCK_CALLS);
 };
 
 initializeLocalDb();
@@ -84,15 +85,16 @@ const mockSupabase = {
   auth: {
     signInWithPassword: ({ email, password }: any) => {
       const users = [
-        { email: 'superadmin@kovex.net', role: 'SUPERADMIN', name: 'Diego Ramírez', id: '00000000-0000-0000-0000-000000000001' },
-        { email: 'manager@kovex.net', role: 'MANAGER', name: 'Ana Quintero', id: '00000000-0000-0000-0000-000000000002' },
-        { email: 'agente1@kovex.net', role: 'AGENTE', name: 'Carlos Méndez', id: '00000000-0000-0000-0000-000000000003' },
-        { email: 'agente2@kovex.net', role: 'AGENTE', name: 'Valeria Soto', id: '00000000-0000-0000-0000-000000000004' },
-        { email: 'supervisor@kovex.net', role: 'SUPERVISOR', name: 'Isabel Paredes', id: '00000000-0000-0000-0000-000000000005' },
+        { email: 'kovex.net@gmail.com', password: '@Kovex3412s', role: 'SUPERADMIN', name: 'Kovex Admin', id: 'f82fb25d-c6e1-4e16-ad4d-ed3813359800' },
+        { email: 'superadmin@kovex.net', password: 'Kovex2025!', role: 'SUPERADMIN', name: 'Diego Ramírez', id: '00000000-0000-0000-0000-000000000001' },
+        { email: 'manager@kovex.net', password: 'Kovex2025!', role: 'MANAGER', name: 'Ana Quintero', id: '00000000-0000-0000-0000-000000000002' },
+        { email: 'agente1@kovex.net', password: 'Kovex2025!', role: 'AGENTE', name: 'Carlos Méndez', id: '00000000-0000-0000-0000-000000000003' },
+        { email: 'agente2@kovex.net', password: 'Kovex2025!', role: 'AGENTE', name: 'Valeria Soto', id: '00000000-0000-0000-0000-000000000004' },
+        { email: 'supervisor@kovex.net', password: 'Kovex2025!', role: 'SUPERVISOR', name: 'Isabel Paredes', id: '00000000-0000-0000-0000-000000000005' },
       ];
       
       const found = users.find(u => u.email === email);
-      if (found && password === 'Kovex2025!') {
+      if (found && password === found.password) {
         const session = {
           access_token: 'mock-token',
           user: {
@@ -121,14 +123,14 @@ const mockSupabase = {
     }
   },
   from: (table: string) => {
-    const key = `kovex_v3_${table}`;
+    const key = `kovex_v4_${table}`;
     return {
       select: (columns = '*') => {
         const data = getCollection(key);
         
         // Handle join simulated references
         if (table === 'deals') {
-          const leads = getCollection('kovex_v3_leads');
+          const leads = getCollection('kovex_v4_leads');
           data.forEach((deal: any) => {
             deal.lead = leads.find((l: any) => l.id === deal.lead_id);
           });
@@ -169,7 +171,7 @@ const mockSupabase = {
         // Log activity automatically
         if (table !== 'activities') {
           const session = JSON.parse(localStorage.getItem('kovex_session') || '{}');
-          const acts = getCollection('kovex_v3_activities');
+          const acts = getCollection('kovex_v4_activities');
           acts.unshift({
             id: crypto.randomUUID(),
             entity_type: table.replace(/s$/, ''),
@@ -179,7 +181,7 @@ const mockSupabase = {
             created_by: session.user?.id || null,
             created_at: new Date().toISOString()
           });
-          saveCollection('kovex_v3_activities', acts);
+          saveCollection('kovex_v4_activities', acts);
         }
         
         return mockResponse([newRecord]);
@@ -201,7 +203,7 @@ const mockSupabase = {
             // Log activity
             if (table !== 'activities' && updatedRecord) {
               const session = JSON.parse(localStorage.getItem('kovex_session') || '{}');
-              const acts = getCollection('kovex_v3_activities');
+              const acts = getCollection('kovex_v4_activities');
               acts.unshift({
                 id: crypto.randomUUID(),
                 entity_type: table.replace(/s$/, ''),
@@ -211,7 +213,7 @@ const mockSupabase = {
                 created_by: session.user?.id || null,
                 created_at: new Date().toISOString()
               });
-              saveCollection('kovex_v3_activities', acts);
+              saveCollection('kovex_v4_activities', acts);
             }
             
             return mockResponse(updatedRecord ? [updatedRecord] : []);
