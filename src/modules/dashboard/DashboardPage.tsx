@@ -128,17 +128,23 @@ export default function DashboardPage() {
     setConversionData(weeklyTrend);
 
     // 3. Lead Sources dynamically
-    const sourcesCount: Record<string, number> = { WhatsApp: 0, Web: 0, Referido: 0, Llamada: 0 };
+    const sourcesCount: Record<string, number> = {};
     leads?.forEach((l: any) => {
-      if (sourcesCount[l.source] !== undefined) {
-        sourcesCount[l.source]++;
+      if (l.source) {
+        sourcesCount[l.source] = (sourcesCount[l.source] || 0) + 1;
       }
     });
-    const dynamicSources = Object.keys(sourcesCount).map(key => ({
-      name: key,
-      Cantidad: sourcesCount[key],
-      fill: key === 'WhatsApp' ? '#22C55E' : key === 'Web' ? '#00E5CC' : key === 'Referido' ? '#A78BFA' : '#F59E0B'
-    }));
+    const dynamicSources = Object.keys(sourcesCount).map(key => {
+      let fill = '#F59E0B';
+      if (key === 'WhatsApp') fill = '#22C55E';
+      else if (key === 'Web') fill = '#00E5CC';
+      else if (key === 'Referido') fill = '#A78BFA';
+      return {
+        name: key,
+        Cantidad: sourcesCount[key],
+        fill
+      };
+    });
     setSourcesData(dynamicSources);
 
     // 4. Countries dynamically
