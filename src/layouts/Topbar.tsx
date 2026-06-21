@@ -4,7 +4,7 @@ import { useUIStore } from '@/store/uiStore';
 import { useNotificationsStore } from '@/store/notificationsStore';
 import { useAuthStore } from '@/store/authStore';
 import { Menu, Search, Bell, MessageSquare, Plus, ChevronDown, Clock } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase, isRealSupabase } from '@/lib/supabase';
 
 export default function Topbar() {
   const navigate = useNavigate();
@@ -140,7 +140,16 @@ export default function Topbar() {
           <Menu size={18} />
         </button>
         <div className="flex flex-col">
-          <h2 className="font-display font-extrabold text-sm text-white leading-tight">{title}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-display font-extrabold text-sm text-white leading-tight">{title}</h2>
+            <span className={`text-[8px] px-1.5 py-0.5 rounded font-extrabold tracking-wider ${
+              isRealSupabase 
+                ? 'bg-kovex-success/15 text-kovex-success border border-kovex-success/20' 
+                : 'bg-kovex-warning/15 text-kovex-warning border border-kovex-warning/20'
+            }`}>
+              {isRealSupabase ? 'PROD' : 'MOCK'}
+            </span>
+          </div>
           <span className="text-[10px] text-kovex-muted font-medium mt-0.5">{crumb}</span>
         </div>
       </div>

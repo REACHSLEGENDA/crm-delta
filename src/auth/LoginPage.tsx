@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useNotificationsStore } from '@/store/notificationsStore';
 import { Eye, EyeOff, Loader2, Mail, Lock, ShieldCheck, Globe } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { isRealSupabase } from '@/lib/supabase';
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Ingresa un correo electrónico válido' }),
@@ -314,8 +315,14 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-8 text-center text-xs text-kovex-muted">
-            ¿No tienes cuenta? <span className="text-kovex-primary font-semibold">Solicítala a tu supervisor</span>
+          <div className="mt-8 text-center text-xs text-kovex-muted flex flex-col items-center gap-2">
+            <div>
+              ¿No tienes cuenta? <span className="text-kovex-primary font-semibold">Solicítala a tu supervisor</span>
+            </div>
+            <div className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-kovex-surface/80 border border-kovex-border text-[10px] text-kovex-muted select-none">
+              <span className={`w-2 h-2 rounded-full ${isRealSupabase ? 'bg-kovex-success animate-pulse' : 'bg-kovex-warning'}`} />
+              <span>Servidor: {isRealSupabase ? 'Producción (Supabase Real)' : 'Modo Demo (Local Mock)'}</span>
+            </div>
           </div>
         </div>
       </div>
