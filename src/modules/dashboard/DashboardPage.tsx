@@ -421,6 +421,141 @@ export default function DashboardPage() {
     }
   };
 
+  const openPrintWindow = (title: string, htmlBody: string) => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const now = new Date().toLocaleString('es-MX', { dateStyle: 'long', timeStyle: 'short' });
+    win.document.write(`
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+      <title>${title} – Delta Capital</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Inter', sans-serif; background: #fff; color: #0c1222; }
+        .header { background: linear-gradient(135deg, #060b16 0%, #141d33 100%); color: #fff; padding: 32px 40px 24px; }
+        .logo-row { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+        .logo-circle { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#c5a059,#dfc080); display:flex; align-items:center; justify-content:center; font-weight:900; font-size:16px; color:#060b16; }
+        .brand { font-size:18px; font-weight:900; letter-spacing:2px; }
+        .brand-sub { font-size:9px; letter-spacing:4px; color:#c5a059; text-transform:uppercase; }
+        .report-title { font-size:28px; font-weight:900; margin-bottom:4px; }
+        .report-date { font-size:11px; color:#dfc08099; }
+        .badge { display:inline-block; background:#c5a059; color:#060b16; font-size:9px; font-weight:800; padding:3px 10px; border-radius:20px; letter-spacing:1px; text-transform:uppercase; margin-top:10px; }
+        .content { padding: 32px 40px; }
+        .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:32px; }
+        .kpi-card { border:2px solid #e8e0d0; border-radius:12px; padding:16px 20px; background:#fdfaf6; }
+        .kpi-label { font-size:9px; font-weight:700; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+        .kpi-value { font-size:24px; font-weight:900; color:#060b16; }
+        .section-title { font-size:13px; font-weight:800; color:#060b16; text-transform:uppercase; letter-spacing:1px; border-bottom:2px solid #c5a059; padding-bottom:8px; margin-bottom:16px; }
+        table { width:100%; border-collapse:collapse; font-size:11px; }
+        thead tr { background:#060b16; color:#fff; }
+        thead th { padding:10px 14px; font-weight:700; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.5px; }
+        tbody tr:nth-child(odd) { background:#f9f6f1; }
+        tbody tr:nth-child(even) { background:#fff; }
+        tbody tr:hover { background:#f0ebe0; }
+        td { padding:9px 14px; color:#333; border-bottom:1px solid #ece6d8; }
+        .status-pill { display:inline-block; padding:2px 8px; border-radius:20px; font-size:9px; font-weight:700; text-transform:uppercase; }
+        .status-activo { background:#d1fae5; color:#065f46; }
+        .status-descartado { background:#fee2e2; color:#991b1b; }
+        .status-negociando { background:#fef3c7; color:#92400e; }
+        .status-cerrado { background:#dbeafe; color:#1e40af; }
+        .footer { margin-top:40px; padding:16px 40px; background:#f9f6f1; border-top:2px solid #e8e0d0; display:flex; justify-content:space-between; font-size:10px; color:#888; }
+        @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+      </style></head><body>
+      <div class="header">
+        <div class="logo-row">
+          <div class="logo-circle">DC</div>
+          <div><div class="brand">DELTA CAPITAL</div><div class="brand-sub">Holding Street</div></div>
+        </div>
+        <div class="report-title">${title}</div>
+        <div class="report-date">Generado el ${now}</div>
+        <div class="badge">Reporte Oficial</div>
+      </div>
+      <div class="content">${htmlBody}</div>
+      <div class="footer">
+        <span>© ${new Date().getFullYear()} Delta Capital &amp; Holding Street – Confidencial</span>
+        <span>CRM Delta Capital – Generado automáticamente</span>
+      </div>
+      <script>window.onload=()=>{ window.print(); }<\/script>
+      </body></html>
+    `);
+    win.document.close();
+  };
+
+  const handleExportLeadsPDF = async () => {
+    const { data: leads } = await supabase.from('leads').select('*');
+    if (!leads || leads.length === 0) { addToast({ title: 'Sin datos', description: 'No hay prospectos para exportar.', type: 'error' }); return; }
+    const kpiHtml = `
+      <div class="kpi-grid" style="margin-bottom:28px">
+        <div class="kpi-card"><div class="kpi-label">Total Prospectos</div><div class="kpi-value">${leads.length}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Activos</div><div class="kpi-value">${leads.filter((l:any)=>l.status==='activo').length}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Cerrados</div><div class="kpi-value">${leads.filter((l:any)=>l.status==='cerrado').length}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Inv. Total</div><div class="kpi-value">$${leads.reduce((s:number,l:any)=>s+(parseFloat(l.investment_amount)||0),0).toLocaleString('en-US',{minimumFractionDigits:0})}</div></div>
+      </div>`;
+    const rows = leads.map((l:any) => `<tr>
+      <td>${l.full_name||''}</td>
+      <td>${l.email||''}</td>
+      <td>${l.phone||''}</td>
+      <td>${l.country||''}</td>
+      <td>$${parseFloat(l.investment_amount||0).toLocaleString('en-US')}</td>
+      <td>${l.source||''}</td>
+      <td><span class="status-pill status-${l.status||'activo'}">${l.status||''}</span></td>
+      <td>${l.score||0}</td>
+      <td>${new Date(l.created_at).toLocaleDateString('es-MX')}</td>
+    </tr>`).join('');
+    openPrintWindow('Reporte de Prospectos', `
+      ${kpiHtml}
+      <div class="section-title">Listado de Prospectos</div>
+      <table><thead><tr><th>Nombre</th><th>Email</th><th>Teléfono</th><th>País</th><th>Inversión</th><th>Fuente</th><th>Estado</th><th>Score</th><th>Fecha</th></tr></thead><tbody>${rows}</tbody></table>
+    `);
+  };
+
+  const handleExportDealsPDF = async () => {
+    const { data: deals } = await supabase.from('deals').select('*');
+    if (!deals || deals.length === 0) { addToast({ title: 'Sin datos', description: 'No hay negociaciones para exportar.', type: 'error' }); return; }
+    const total = deals.reduce((s:number,d:any)=>s+(parseFloat(d.amount)||0),0);
+    const kpiHtml = `
+      <div class="kpi-grid" style="margin-bottom:28px">
+        <div class="kpi-card"><div class="kpi-label">Total Deals</div><div class="kpi-value">${deals.length}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Monto Total</div><div class="kpi-value">$${total.toLocaleString('en-US')}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Calientes</div><div class="kpi-value">${deals.filter((d:any)=>d.temperature==='hot').length}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Promedio</div><div class="kpi-value">$${deals.length>0?Math.round(total/deals.length).toLocaleString('en-US'):'0'}</div></div>
+      </div>`;
+    const rows = deals.map((d:any)=>`<tr>
+      <td>${d.id?.slice(0,8)}...</td>
+      <td>${d.stage||''}</td>
+      <td>$${parseFloat(d.amount||0).toLocaleString('en-US')}</td>
+      <td>${d.temperature||''}</td>
+      <td>${d.expected_close?new Date(d.expected_close).toLocaleDateString('es-MX'):''}</td>
+      <td>${new Date(d.created_at).toLocaleDateString('es-MX')}</td>
+    </tr>`).join('');
+    openPrintWindow('Reporte de Negociaciones', `
+      ${kpiHtml}
+      <div class="section-title">Pipeline de Negociaciones</div>
+      <table><thead><tr><th>ID</th><th>Etapa</th><th>Monto</th><th>Temperatura</th><th>Cierre Estimado</th><th>Creado</th></tr></thead><tbody>${rows}</tbody></table>
+    `);
+  };
+
+  const handleExportKPIsPDF = () => {
+    const kpiHtml = `
+      <div class="kpi-grid" style="margin-bottom:28px">
+        <div class="kpi-card"><div class="kpi-label">Total Prospectos</div><div class="kpi-value">${kpis.totalLeads}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Negocios Activos</div><div class="kpi-value">${kpis.activeDeals}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Tasa de Cierre</div><div class="kpi-value">${kpis.winRate}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Revenue Proyectado</div><div class="kpi-value">${kpis.revenue}</div></div>
+      </div>`;
+    openPrintWindow('Resumen Ejecutivo de KPIs', `
+      ${kpiHtml}
+      <div class="section-title">Detalle de Métricas</div>
+      <table><thead><tr><th>Métrica</th><th>Valor</th></tr></thead><tbody>
+        <tr><td>Total Prospectos</td><td>${kpis.totalLeads}</td></tr>
+        <tr><td>Negocios Activos</td><td>${kpis.activeDeals}</td></tr>
+        <tr><td>Tasa de Cierre</td><td>${kpis.winRate}</td></tr>
+        <tr><td>Revenue Proyectado</td><td>${kpis.revenue}</td></tr>
+        <tr><td>Fecha de Reporte</td><td>${new Date().toLocaleString('es-MX')}</td></tr>
+      </tbody></table>
+    `);
+  };
+
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
@@ -475,6 +610,27 @@ export default function DashboardPage() {
               {exportDropdownOpen && (
                 <div className="absolute right-0 mt-2 w-56 bg-kovex-surface border border-kovex-border rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
                   <div className="p-2 space-y-1">
+                    <div className="px-3 py-1 text-[9px] font-bold text-kovex-muted uppercase tracking-widest">PDF con Diseño</div>
+                    <button
+                      onClick={() => { handleExportLeadsPDF(); setExportDropdownOpen(false); }}
+                      className="w-full text-left text-xs text-white hover:bg-kovex-primary/10 hover:text-kovex-primary px-3 py-2 rounded-lg transition-all flex items-center gap-2 font-semibold"
+                    >
+                      <UserPlus size={12} className="text-kovex-primary" /> Prospectos (PDF)
+                    </button>
+                    <button
+                      onClick={() => { handleExportDealsPDF(); setExportDropdownOpen(false); }}
+                      className="w-full text-left text-xs text-white hover:bg-kovex-primary/10 hover:text-kovex-primary px-3 py-2 rounded-lg transition-all flex items-center gap-2 font-semibold"
+                    >
+                      <Briefcase size={12} className="text-kovex-primary" /> Negociaciones (PDF)
+                    </button>
+                    <button
+                      onClick={() => { handleExportKPIsPDF(); setExportDropdownOpen(false); }}
+                      className="w-full text-left text-xs text-white hover:bg-kovex-primary/10 hover:text-kovex-primary px-3 py-2 rounded-lg transition-all flex items-center gap-2 font-semibold"
+                    >
+                      <Target size={12} className="text-kovex-primary" /> KPIs Ejecutivo (PDF)
+                    </button>
+                    <div className="border-t border-kovex-border/40 my-1" />
+                    <div className="px-3 py-1 text-[9px] font-bold text-kovex-muted uppercase tracking-widest">CSV Datos</div>
                     <button
                       onClick={() => {
                         handleExportLeads();
@@ -482,7 +638,7 @@ export default function DashboardPage() {
                       }}
                       className="w-full text-left text-xs text-white hover:bg-kovex-primary/10 hover:text-kovex-primary px-3 py-2 rounded-lg transition-all flex items-center gap-2 font-semibold"
                     >
-                      <UserPlus size={12} className="text-kovex-primary" /> Exportar Prospectos (CSV)
+                      <UserPlus size={12} className="text-kovex-muted" /> Prospectos (CSV)
                     </button>
                     <button
                       onClick={() => {
@@ -491,7 +647,7 @@ export default function DashboardPage() {
                       }}
                       className="w-full text-left text-xs text-white hover:bg-kovex-primary/10 hover:text-kovex-primary px-3 py-2 rounded-lg transition-all flex items-center gap-2 font-semibold"
                     >
-                      <Briefcase size={12} className="text-kovex-primary" /> Exportar Negociaciones (CSV)
+                      <Briefcase size={12} className="text-kovex-muted" /> Negociaciones (CSV)
                     </button>
                     <button
                       onClick={() => {
@@ -500,7 +656,7 @@ export default function DashboardPage() {
                       }}
                       className="w-full text-left text-xs text-white hover:bg-kovex-primary/10 hover:text-kovex-primary px-3 py-2 rounded-lg transition-all flex items-center gap-2 font-semibold"
                     >
-                      <Target size={12} className="text-kovex-primary" /> Exportar Reporte de KPIs (CSV)
+                      <Target size={12} className="text-kovex-muted" /> KPIs (CSV)
                     </button>
                   </div>
                 </div>
