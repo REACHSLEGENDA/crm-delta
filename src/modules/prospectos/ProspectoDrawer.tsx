@@ -10,7 +10,7 @@ import { useAuthStore } from '@/store/authStore';
 import { usePermissions } from '@/hooks/usePermissions';
 import { 
   Phone, Mail, Globe, User, Calendar, FileText, 
-  Trash2, Edit, CheckCircle, UserCheck, MessageSquare 
+  Trash2, Edit, CheckCircle, UserCheck, MessageSquare, DollarSign
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -234,6 +234,12 @@ export default function ProspectoDrawer({ leadId, isOpen, onClose, onEdit }: Pro
             <div className="flex items-center justify-between text-xs">
               <span className="text-kovex-muted flex items-center gap-1.5"><Globe size={12} /> País</span>
               <span className="text-white font-medium">{lead.country || '—'}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-kovex-muted flex items-center gap-1.5"><DollarSign size={12} /> Monto de Inversión</span>
+              <span className="text-kovex-accent font-bold font-mono">
+                {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'USD' }).format(lead.investment_amount || 0)}
+              </span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-kovex-muted flex items-center gap-1.5"><User size={12} /> Agente</span>

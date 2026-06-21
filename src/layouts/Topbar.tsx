@@ -45,6 +45,13 @@ export default function Topbar() {
 
   useEffect(() => {
     checkActiveShift();
+    const handleShiftChange = () => {
+      checkActiveShift();
+    };
+    window.addEventListener('attendance-changed', handleShiftChange);
+    return () => {
+      window.removeEventListener('attendance-changed', handleShiftChange);
+    };
   }, [profile]);
 
   const handleClockToggle = async () => {
@@ -64,6 +71,7 @@ export default function Topbar() {
             type: 'success',
           });
           setActiveShift(null);
+          window.dispatchEvent(new Event('attendance-changed'));
         }
       } else {
         // Clock in
@@ -82,6 +90,7 @@ export default function Topbar() {
           } else {
             checkActiveShift();
           }
+          window.dispatchEvent(new Event('attendance-changed'));
         }
       }
     } catch (err) {

@@ -17,6 +17,7 @@ const leadFormSchema = z.object({
   status: z.enum(['Nuevo', 'Contactado', 'Calificado', 'Descartado']),
   agent_id: z.string().nullable(),
   notes: z.string().optional(),
+  investment_amount: z.coerce.number().optional(),
 });
 
 type LeadFormFields = z.infer<typeof leadFormSchema>;
@@ -33,7 +34,7 @@ export default function ProspectoForm({ lead, onClose }: ProspectoFormProps) {
   const [agents, setAgents] = useState<{ id: string; name: string }[]>([]);
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<LeadFormFields>({
-    resolver: zodResolver(leadFormSchema),
+    resolver: zodResolver(leadFormSchema) as any,
     defaultValues: {
       full_name: '',
       email: '',
@@ -43,6 +44,7 @@ export default function ProspectoForm({ lead, onClose }: ProspectoFormProps) {
       status: 'Nuevo',
       agent_id: null,
       notes: '',
+      investment_amount: 0,
     }
   });
 
@@ -67,6 +69,7 @@ export default function ProspectoForm({ lead, onClose }: ProspectoFormProps) {
         status: lead.status,
         agent_id: lead.agent_id,
         notes: lead.notes || '',
+        investment_amount: lead.investment_amount || 0,
       });
     }
   }, [lead, reset]);
@@ -83,6 +86,7 @@ export default function ProspectoForm({ lead, onClose }: ProspectoFormProps) {
           status: data.status,
           agent_id: data.agent_id,
           notes: data.notes || null,
+          investment_amount: Number(data.investment_amount || 0),
         });
         addToast({
           title: 'Prospecto actualizado',
@@ -100,7 +104,8 @@ export default function ProspectoForm({ lead, onClose }: ProspectoFormProps) {
           agent_id: data.agent_id,
           notes: data.notes || null,
           score: Math.floor(Math.random() * 40) + 50,
-          tags: []
+          tags: [],
+          investment_amount: Number(data.investment_amount || 0),
         });
         addToast({
           title: 'Prospecto creado',
@@ -156,7 +161,7 @@ export default function ProspectoForm({ lead, onClose }: ProspectoFormProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div>
           <label className="block text-xs font-semibold text-kovex-muted uppercase tracking-wider mb-2">
             Teléfono
@@ -181,6 +186,21 @@ export default function ProspectoForm({ lead, onClose }: ProspectoFormProps) {
               <option key={c} value={c} className="bg-kovex-surface">{c}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-kovex-muted uppercase tracking-wider mb-2">
+            Monto de Inversión (USD)
+          </label>
+          <input
+            type="number"
+            placeholder="0"
+            {...register('investment_amount')}
+            className="w-full bg-kovex-bg border border-kovex-border focus:border-kovex-primary/50 text-white rounded-xl p-3 text-sm outline-none transition-all"
+          />
+          {errors.investment_amount && (
+            <span className="text-[10px] text-kovex-danger mt-1 block">{errors.investment_amount.message}</span>
+          )}
         </div>
       </div>
 

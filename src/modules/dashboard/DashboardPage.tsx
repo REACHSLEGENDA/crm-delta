@@ -12,6 +12,9 @@ import {
 } from 'recharts';
 import { useAuthStore } from '@/store/authStore';
 import { useNotificationsStore } from '@/store/notificationsStore';
+import Modal from '@/components/shared/Modal';
+import ProspectoForm from '@/modules/prospectos/ProspectoForm';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface TaskItem {
   id: string;
@@ -23,6 +26,21 @@ interface TaskItem {
 export default function DashboardPage() {
   const profile = useAuthStore((state) => state.profile);
   const addToast = useNotificationsStore((state) => state.addToast);
+  const permissions = usePermissions();
+
+  // Dropdown states
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+  const [quickActionDropdownOpen, setQuickActionDropdownOpen] = useState(false);
+
+  // Modal states
+  const [prospectoFormOpen, setProspectoFormOpen] = useState(false);
+  const [newTaskModalOpen, setNewTaskModalOpen] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskMeta, setNewTaskMeta] = useState('');
+
+  // Attendance states
+  const [activeShift, setActiveShift] = useState<any | null>(null);
+  const [loadingShift, setLoadingShift] = useState(false);
 
   // States
   const [kpis, setKpis] = useState({
@@ -41,119 +59,143 @@ export default function DashboardPage() {
   const [countriesData, setCountriesData] = useState<any[]>([]);
   const [temperatureData, setTemperatureData] = useState<any[]>([]);
 
+  const fetchData = async () => {
+    // Fetch Leads
+    const { data: leads } = await supabase.from('leads').select('*');
+    const leadsCount = leads?.length || 0;
+
+    // Fetch Deals
+    const { data: deals } = await supabase.from('deals').select('*');
+    const activeDeals = deals?.filter((d: any) => d.stage !== 'won' && d.stage !== 'lost').length || 0;
+    
+    // Calculate win rate
+    const wonDeals = deals?.filter((d: any) => d.stage === 'won').length || 0;
+    const totalClosed = deals?.filter((d: any) => d.stage === 'won' || d.stage === 'lost').length || 0;
+    const winRatePercent = totalClosed > 0 ? ((wonDeals / totalClosed) * 100).toFixed(1) + '%' : '0%';
+
+    // Calculate revenue
+    const totalRevenue = deals
+      ?.filter((d: any) => d.stage !== 'lost')
+      ?.reduce((acc: number, curr: any) => acc + Number(curr.amount), 0) || 0;
+    
+    setKpis({
+      totalLeads: leadsCount,
+      activeDeals,
+      winRate: winRatePercent,
+      revenue: '$' + (totalRevenue / 1000).toFixed(1) + 'K',
+    });
+
+    // Fetch activities
+    const { data: acts } = await supabase.from('activities').select('*').order('created_at', { ascending: false });
+    setActivities(acts?.slice(0, 5) || []);
+
+    // 1. Calculate funnel stages dynamically
+    const countContacted = leads?.filter((l: any) => l.status === 'Contactado').length || 0;
+    const countCalificado = leads?.filter((l: any) => l.status === 'Calificado').length || 0;
+    const countInterested = deals?.filter((d: any) => d.stage === 'int').length || 0;
+    const countDemo = deals?.filter((d: any) => d.stage === 'demo').length || 0;
+    const countWon = deals?.filter((d: any) => d.stage === 'won').length || 0;
+
+    const dynamicFunnel = [
+      { name: 'Total Leads', cantidad: leadsCount, fill: '#64748B' },
+      { name: 'Contactados', cantidad: countContacted, fill: '#A78BFA' },
+      { name: 'Calificados', cantidad: countCalificado, fill: '#818CF8' },
+      { name: 'Interesados', cantidad: countInterested, fill: '#E91E8C' },
+      { name: 'Demos / Presentación', cantidad: countDemo, fill: '#F59E0B' },
+      { name: 'Depósito / Ganados', cantidad: countWon, fill: '#22C55E' },
+    ];
+    setFunnelData(dynamicFunnel);
+
+    // 2. Weekly conversion/revenue trend dynamically
+    const weeklyTrend = [
+      { name: 'Sem 1', Conversiones: 0, Revenue: 0 },
+      { name: 'Sem 2', Conversiones: 0, Revenue: 0 },
+      { name: 'Sem 3', Conversiones: 0, Revenue: 0 },
+      { name: 'Sem 4', Conversiones: 0, Revenue: 0 },
+    ];
+    deals?.forEach((deal: any) => {
+      const dealDate = new Date(deal.created_at || Date.now());
+      const diffDays = Math.floor((Date.now() - dealDate.getTime()) / (1000 * 60 * 60 * 24));
+      const weekIdx = Math.floor(diffDays / 7);
+      if (weekIdx >= 0 && weekIdx < 4) {
+        const targetIdx = 3 - weekIdx;
+        if (deal.stage === 'won') {
+          weeklyTrend[targetIdx].Conversiones += 1;
+          weeklyTrend[targetIdx].Revenue += Number(deal.amount || 0) / 1000; // in thousands
+        }
+      }
+    });
+    setConversionData(weeklyTrend);
+
+    // 3. Lead Sources dynamically
+    const sourcesCount: Record<string, number> = { WhatsApp: 0, Web: 0, Referido: 0, Llamada: 0 };
+    leads?.forEach((l: any) => {
+      if (sourcesCount[l.source] !== undefined) {
+        sourcesCount[l.source]++;
+      }
+    });
+    const dynamicSources = Object.keys(sourcesCount).map(key => ({
+      name: key,
+      Cantidad: sourcesCount[key],
+      fill: key === 'WhatsApp' ? '#22C55E' : key === 'Web' ? '#00E5CC' : key === 'Referido' ? '#A78BFA' : '#F59E0B'
+    }));
+    setSourcesData(dynamicSources);
+
+    // 4. Countries dynamically
+    const countriesCount: Record<string, number> = {};
+    leads?.forEach((l: any) => {
+      if (l.country) {
+        countriesCount[l.country] = (countriesCount[l.country] || 0) + 1;
+      }
+    });
+    const dynamicCountries = Object.keys(countriesCount)
+      .map(key => ({ name: key, Cantidad: countriesCount[key] }))
+      .sort((a, b) => b.Cantidad - a.Cantidad)
+      .slice(0, 5);
+    setCountriesData(dynamicCountries);
+
+    // 5. Pipeline Temperature dynamically
+    const tempCount: Record<string, number> = { cold: 0, warm: 0, hot: 0 };
+    deals?.forEach((d: any) => {
+      if (tempCount[d.temperature] !== undefined) {
+        tempCount[d.temperature]++;
+      }
+    });
+    const dynamicTemp = [
+      { name: 'Frío (Cold)', Cantidad: tempCount.cold, fill: '#64748B' },
+      { name: 'Templado (Warm)', Cantidad: tempCount.warm, fill: '#F59E0B' },
+      { name: 'Caliente (Hot)', Cantidad: tempCount.hot, fill: '#E91E8C' }
+    ];
+    setTemperatureData(dynamicTemp);
+  };
+
+  const checkActiveShift = async () => {
+    if (!profile?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('profile_id', profile.id)
+        .eq('status', 'working');
+      if (!error && data && data.length > 0) {
+        setActiveShift(data[0]);
+      } else {
+        setActiveShift(null);
+      }
+    } catch (err) {
+      console.error('Error fetching shift status', err);
+    }
+  };
+
   // Initialize and fetch data
   useEffect(() => {
-    const fetchData = async () => {
-      // Fetch Leads
-      const { data: leads } = await supabase.from('leads').select('*');
-      const leadsCount = leads?.length || 0;
-
-      // Fetch Deals
-      const { data: deals } = await supabase.from('deals').select('*');
-      const activeDeals = deals?.filter((d: any) => d.stage !== 'won' && d.stage !== 'lost').length || 0;
-      
-      // Calculate win rate
-      const wonDeals = deals?.filter((d: any) => d.stage === 'won').length || 0;
-      const totalClosed = deals?.filter((d: any) => d.stage === 'won' || d.stage === 'lost').length || 0;
-      const winRatePercent = totalClosed > 0 ? ((wonDeals / totalClosed) * 100).toFixed(1) + '%' : '0%';
-
-      // Calculate revenue
-      const totalRevenue = deals
-        ?.filter((d: any) => d.stage !== 'lost')
-        ?.reduce((acc: number, curr: any) => acc + Number(curr.amount), 0) || 0;
-      
-      setKpis({
-        totalLeads: leadsCount,
-        activeDeals,
-        winRate: winRatePercent,
-        revenue: '$' + (totalRevenue / 1000).toFixed(1) + 'K',
-      });
-
-      // Fetch activities
-      const { data: acts } = await supabase.from('activities').select('*').order('created_at', { ascending: false });
-      setActivities(acts?.slice(0, 5) || []);
-
-      // 1. Calculate funnel stages dynamically
-      const countContacted = leads?.filter((l: any) => l.status === 'Contactado').length || 0;
-      const countCalificado = leads?.filter((l: any) => l.status === 'Calificado').length || 0;
-      const countInterested = deals?.filter((d: any) => d.stage === 'int').length || 0;
-      const countDemo = deals?.filter((d: any) => d.stage === 'demo').length || 0;
-      const countWon = deals?.filter((d: any) => d.stage === 'won').length || 0;
-
-      const dynamicFunnel = [
-        { name: 'Total Leads', cantidad: leadsCount, fill: '#64748B' },
-        { name: 'Contactados', cantidad: countContacted, fill: '#A78BFA' },
-        { name: 'Calificados', cantidad: countCalificado, fill: '#818CF8' },
-        { name: 'Interesados', cantidad: countInterested, fill: '#E91E8C' },
-        { name: 'Demos / Presentación', cantidad: countDemo, fill: '#F59E0B' },
-        { name: 'Depósito / Ganados', cantidad: countWon, fill: '#22C55E' },
-      ];
-      setFunnelData(dynamicFunnel);
-
-      // 2. Weekly conversion/revenue trend dynamically
-      const weeklyTrend = [
-        { name: 'Sem 1', Conversiones: 0, Revenue: 0 },
-        { name: 'Sem 2', Conversiones: 0, Revenue: 0 },
-        { name: 'Sem 3', Conversiones: 0, Revenue: 0 },
-        { name: 'Sem 4', Conversiones: 0, Revenue: 0 },
-      ];
-      deals?.forEach((deal: any) => {
-        const dealDate = new Date(deal.created_at || Date.now());
-        const diffDays = Math.floor((Date.now() - dealDate.getTime()) / (1000 * 60 * 60 * 24));
-        const weekIdx = Math.floor(diffDays / 7);
-        if (weekIdx >= 0 && weekIdx < 4) {
-          const targetIdx = 3 - weekIdx;
-          if (deal.stage === 'won') {
-            weeklyTrend[targetIdx].Conversiones += 1;
-            weeklyTrend[targetIdx].Revenue += Number(deal.amount || 0) / 1000; // in thousands
-          }
-        }
-      });
-      setConversionData(weeklyTrend);
-
-      // 3. Lead Sources dynamically
-      const sourcesCount: Record<string, number> = { WhatsApp: 0, Web: 0, Referido: 0, Llamada: 0 };
-      leads?.forEach((l: any) => {
-        if (sourcesCount[l.source] !== undefined) {
-          sourcesCount[l.source]++;
-        }
-      });
-      const dynamicSources = Object.keys(sourcesCount).map(key => ({
-        name: key,
-        Cantidad: sourcesCount[key],
-        fill: key === 'WhatsApp' ? '#22C55E' : key === 'Web' ? '#00E5CC' : key === 'Referido' ? '#A78BFA' : '#F59E0B'
-      }));
-      setSourcesData(dynamicSources);
-
-      // 4. Countries dynamically
-      const countriesCount: Record<string, number> = {};
-      leads?.forEach((l: any) => {
-        if (l.country) {
-          countriesCount[l.country] = (countriesCount[l.country] || 0) + 1;
-        }
-      });
-      const dynamicCountries = Object.keys(countriesCount)
-        .map(key => ({ name: key, Cantidad: countriesCount[key] }))
-        .sort((a, b) => b.Cantidad - a.Cantidad)
-        .slice(0, 5);
-      setCountriesData(dynamicCountries);
-
-      // 5. Pipeline Temperature dynamically
-      const tempCount: Record<string, number> = { cold: 0, warm: 0, hot: 0 };
-      deals?.forEach((d: any) => {
-        if (tempCount[d.temperature] !== undefined) {
-          tempCount[d.temperature]++;
-        }
-      });
-      const dynamicTemp = [
-        { name: 'Frío (Cold)', Cantidad: tempCount.cold, fill: '#64748B' },
-        { name: 'Templado (Warm)', Cantidad: tempCount.warm, fill: '#F59E0B' },
-        { name: 'Caliente (Hot)', Cantidad: tempCount.hot, fill: '#E91E8C' }
-      ];
-      setTemperatureData(dynamicTemp);
-    };
-
     fetchData();
+    checkActiveShift();
+
+    const handleShiftChange = () => {
+      checkActiveShift();
+    };
+    window.addEventListener('attendance-changed', handleShiftChange);
 
     // Default Today's Tasks
     const localTasks = localStorage.getItem('kovex_tasks_v4');
@@ -167,15 +209,233 @@ export default function DashboardPage() {
       localStorage.setItem('kovex_tasks_v4', JSON.stringify(defaultTasks));
       setTasks(defaultTasks);
     }
-  }, []);
+
+    return () => {
+      window.removeEventListener('attendance-changed', handleShiftChange);
+    };
+  }, [profile]);
 
   const handleToggleTask = (id: string) => {
     const updated = tasks.map((t) => t.id === id ? { ...t, done: !t.done } : t);
     setTasks(updated);
-    localStorage.setItem('kovex_tasks', JSON.stringify(updated));
+    localStorage.setItem('kovex_tasks_v4', JSON.stringify(updated));
     addToast({
       title: 'Tarea actualizada',
       description: 'El estado de la tarea ha sido guardado.',
+      type: 'success',
+    });
+  };
+
+  const handleToggleShift = async () => {
+    if (!profile?.id) return;
+    setLoadingShift(true);
+    try {
+      if (activeShift) {
+        // Clock out
+        const { error } = await supabase
+          .from('attendance')
+          .update({ clock_out: new Date().toISOString(), status: 'completed' })
+          .eq('id', activeShift.id);
+        if (!error) {
+          addToast({
+            title: 'Turno finalizado',
+            description: 'Tu marca de salida ha sido registrada con éxito.',
+            type: 'success',
+          });
+          setActiveShift(null);
+          window.dispatchEvent(new Event('attendance-changed'));
+        }
+      } else {
+        // Clock in
+        const { data, error } = await supabase
+          .from('attendance')
+          .insert({ profile_id: profile.id, clock_in: new Date().toISOString(), status: 'working' });
+        if (!error) {
+          addToast({
+            title: 'Turno iniciado',
+            description: 'Tu marca de entrada ha sido registrada con éxito.',
+            type: 'success',
+          });
+          window.dispatchEvent(new Event('attendance-changed'));
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingShift(false);
+    }
+  };
+
+  const handleExportLeads = async () => {
+    try {
+      const { data: leads } = await supabase.from('leads').select('*');
+      if (!leads || leads.length === 0) {
+        addToast({
+          title: 'Exportación fallida',
+          description: 'No hay datos de prospectos para exportar.',
+          type: 'error',
+        });
+        return;
+      }
+
+      const headers = ['ID', 'Nombre', 'Email', 'Teléfono', 'País', 'Inversión', 'Fuente', 'Estado', 'Score', 'Notas', 'Creado En'];
+      const rows = leads.map((l: any) => [
+        l.id,
+        l.full_name,
+        l.email,
+        l.phone || '',
+        l.country || '',
+        l.investment_amount || 0,
+        l.source,
+        l.status,
+        l.score || 0,
+        l.notes || '',
+        l.created_at
+      ]);
+
+      const csvContent = '\uFEFF' + [
+        headers.join(','),
+        ...rows.map((row: any[]) => row.map((val: any) => `"${String(val).replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `reporte_prospectos_${new Date().toISOString().slice(0,10)}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      addToast({
+        title: 'Exportación completada',
+        description: 'Se ha descargado el archivo CSV de prospectos.',
+        type: 'success',
+      });
+    } catch (error: any) {
+      addToast({
+        title: 'Error de exportación',
+        description: error.message || 'Hubo un problema al generar la descarga.',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleExportDeals = async () => {
+    try {
+      const { data: deals } = await supabase.from('deals').select('*');
+      if (!deals || deals.length === 0) {
+        addToast({
+          title: 'Exportación fallida',
+          description: 'No hay datos de negociaciones para exportar.',
+          type: 'error',
+        });
+        return;
+      }
+
+      const headers = ['ID', 'Lead ID', 'Etapa', 'Monto', 'Temperatura', 'Agente ID', 'Creado En', 'Cierre Estimado'];
+      const rows = deals.map((d: any) => [
+        d.id,
+        d.lead_id,
+        d.stage,
+        d.amount || 0,
+        d.temperature,
+        d.agent_id || '',
+        d.created_at,
+        d.expected_close || ''
+      ]);
+
+      const csvContent = '\uFEFF' + [
+        headers.join(','),
+        ...rows.map((row: any[]) => row.map((val: any) => `"${String(val).replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `reporte_negociaciones_${new Date().toISOString().slice(0,10)}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      addToast({
+        title: 'Exportación completada',
+        description: 'Se ha descargado el archivo CSV de negociaciones.',
+        type: 'success',
+      });
+    } catch (error: any) {
+      addToast({
+        title: 'Error de exportación',
+        description: error.message || 'Hubo un problema al generar la descarga.',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleExportSummary = () => {
+    try {
+      const headers = ['Métrica', 'Valor'];
+      const rows = [
+        ['Total Prospectos', kpis.totalLeads],
+        ['Negocios Activos', kpis.activeDeals],
+        ['Tasa de Cierre', kpis.winRate],
+        ['Revenue Proyectado', kpis.revenue],
+        ['Fecha de Reporte', new Date().toLocaleString()]
+      ];
+
+      const csvContent = '\uFEFF' + [
+        headers.join(','),
+        ...rows.map((row: any[]) => row.map((val: any) => `"${String(val).replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `resumen_kpis_${new Date().toISOString().slice(0,10)}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      addToast({
+        title: 'Reporte descargado',
+        description: 'Se ha descargado el archivo CSV del resumen de KPIs.',
+        type: 'success',
+      });
+    } catch (error: any) {
+      addToast({
+        title: 'Error de exportación',
+        description: error.message || 'Hubo un problema al generar la descarga.',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleAddTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+
+    const newTask: TaskItem = {
+      id: crypto.randomUUID(),
+      title: newTaskTitle,
+      meta: newTaskMeta.trim() || 'General',
+      done: false
+    };
+
+    const updated = [newTask, ...tasks];
+    setTasks(updated);
+    localStorage.setItem('kovex_tasks_v4', JSON.stringify(updated));
+    setNewTaskTitle('');
+    setNewTaskMeta('');
+    setNewTaskModalOpen(false);
+
+    addToast({
+      title: 'Tarea agregada',
+      description: 'La tarea ha sido creada correctamente.',
       type: 'success',
     });
   };
@@ -192,13 +452,110 @@ export default function DashboardPage() {
             Esto pasó en KOVEX durante las últimas 24h
           </p>
         </div>
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 border border-kovex-border hover:bg-white/[0.02] text-xs font-semibold px-4 py-2 rounded-xl text-kovex-text transition-colors">
-            <Download size={14} /> Exportar
-          </button>
-          <button className="flex items-center gap-2 bg-kovex-primary hover:brightness-105 active:scale-[0.98] text-xs font-bold px-4 py-2 rounded-xl text-white transition-all shadow-lg shadow-kovex-primary/10">
-            <Sparkles size={14} /> Acción Rápida
-          </button>
+        <div className="flex gap-3 relative">
+          {/* Export button and dropdown */}
+          {permissions.canExportLeads && (
+            <div className="relative">
+              <button 
+                onClick={() => {
+                  setExportDropdownOpen(!exportDropdownOpen);
+                  setQuickActionDropdownOpen(false);
+                }}
+                className="flex items-center gap-2 border border-kovex-border hover:bg-white/[0.02] text-xs font-semibold px-4 py-2 rounded-xl text-kovex-text transition-colors"
+              >
+                <Download size={14} /> Exportar
+              </button>
+              
+              {exportDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-kovex-surface border border-kovex-border rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+                  <div className="p-2 space-y-1">
+                    <button
+                      onClick={() => {
+                        handleExportLeads();
+                        setExportDropdownOpen(false);
+                      }}
+                      className="w-full text-left text-xs text-white hover:bg-kovex-primary/10 hover:text-kovex-primary px-3 py-2 rounded-lg transition-all flex items-center gap-2 font-semibold"
+                    >
+                      <UserPlus size={12} className="text-kovex-primary" /> Exportar Prospectos (CSV)
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleExportDeals();
+                        setExportDropdownOpen(false);
+                      }}
+                      className="w-full text-left text-xs text-white hover:bg-kovex-primary/10 hover:text-kovex-primary px-3 py-2 rounded-lg transition-all flex items-center gap-2 font-semibold"
+                    >
+                      <Briefcase size={12} className="text-kovex-primary" /> Exportar Negociaciones (CSV)
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleExportSummary();
+                        setExportDropdownOpen(false);
+                      }}
+                      className="w-full text-left text-xs text-white hover:bg-kovex-primary/10 hover:text-kovex-primary px-3 py-2 rounded-lg transition-all flex items-center gap-2 font-semibold"
+                    >
+                      <Target size={12} className="text-kovex-primary" /> Exportar Reporte de KPIs (CSV)
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Quick Action button and dropdown */}
+          <div className="relative">
+            <button 
+              onClick={() => {
+                setQuickActionDropdownOpen(!quickActionDropdownOpen);
+                setExportDropdownOpen(false);
+              }}
+              className="flex items-center gap-2 bg-kovex-primary hover:brightness-105 active:scale-[0.98] text-xs font-bold px-4 py-2 rounded-xl text-white transition-all shadow-lg shadow-kovex-primary/10"
+            >
+              <Sparkles size={14} /> Acción Rápida
+            </button>
+            
+            {quickActionDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-kovex-surface border border-kovex-border rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+                <div className="p-2 space-y-1">
+                  {/* Attendance toggle */}
+                  <button
+                    disabled={loadingShift}
+                    onClick={() => {
+                      handleToggleShift();
+                      setQuickActionDropdownOpen(false);
+                    }}
+                    className="w-full text-left text-xs text-white hover:bg-kovex-primary/10 hover:text-kovex-primary px-3 py-2 rounded-lg transition-all flex items-center gap-2 font-bold disabled:opacity-40"
+                  >
+                    <ActivityIcon size={12} className="text-kovex-accent" /> {activeShift ? 'Finalizar Turno' : 'Iniciar Turno'}
+                  </button>
+                  
+                  {/* Create Lead */}
+                  {permissions.canCreateLead && (
+                    <button
+                      onClick={() => {
+                        setProspectoFormOpen(true);
+                        setQuickActionDropdownOpen(false);
+                      }}
+                      className="w-full text-left text-xs text-white hover:bg-kovex-primary/10 hover:text-kovex-primary px-3 py-2 rounded-lg transition-all flex items-center gap-2 font-bold"
+                    >
+                      <UserPlus size={12} className="text-kovex-accent" /> Registrar Prospecto
+                    </button>
+                  )}
+
+                  {/* Add Task */}
+                  <button
+                    onClick={() => {
+                      setNewTaskModalOpen(true);
+                      setQuickActionDropdownOpen(false);
+                    }}
+                    className="w-full text-left text-xs text-white hover:bg-kovex-primary/10 hover:text-kovex-primary px-3 py-2 rounded-lg transition-all flex items-center gap-2 font-bold"
+                  >
+                    <CheckSquare size={12} className="text-kovex-accent" /> Agregar Tarea Pendiente
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -446,6 +803,66 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Nuevo Prospecto Modal */}
+      <Modal
+        isOpen={prospectoFormOpen}
+        onClose={() => setProspectoFormOpen(false)}
+        title="Nuevo Prospecto"
+      >
+        <ProspectoForm
+          onClose={() => {
+            setProspectoFormOpen(false);
+            fetchData();
+          }}
+        />
+      </Modal>
+
+      {/* Nueva Tarea Modal */}
+      <Modal
+        isOpen={newTaskModalOpen}
+        onClose={() => setNewTaskModalOpen(false)}
+        title="Agregar Nueva Tarea"
+      >
+        <form onSubmit={handleAddTask} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-kovex-muted uppercase tracking-wider mb-2">Título de la Tarea</label>
+            <input
+              type="text"
+              required
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              placeholder="Ej. Llamar a prospecto VIP..."
+              className="w-full bg-[#060b16] border border-kovex-border text-white text-xs rounded-xl p-3 outline-none focus:border-kovex-primary/45"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-kovex-muted uppercase tracking-wider mb-2">Categoría / Meta</label>
+            <input
+              type="text"
+              value={newTaskMeta}
+              onChange={(e) => setNewTaskMeta(e.target.value)}
+              placeholder="Ej. Llamada, Seguimiento, Sistema"
+              className="w-full bg-[#060b16] border border-kovex-border text-white text-xs rounded-xl p-3 outline-none focus:border-kovex-primary/45"
+            />
+          </div>
+          <div className="pt-4 border-t border-kovex-border flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setNewTaskModalOpen(false)}
+              className="px-4 py-2 border border-kovex-border text-xs rounded-xl text-white font-semibold"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-kovex-primary hover:brightness-105 active:scale-[0.98] text-[#060b16] text-xs font-bold rounded-xl transition-all"
+            >
+              Guardar Tarea
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

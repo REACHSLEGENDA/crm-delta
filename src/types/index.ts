@@ -27,6 +27,7 @@ export interface Lead {
   agent_id: string | null;
   notes: string | null;
   tags: string[];
+  investment_amount?: number;
 }
 
 export interface Deal {

@@ -65,6 +65,7 @@ export default function ProspectosPage() {
         country: cols[3]?.trim().replace(/^["']|["']$/g, '') || 'México',
         source: (cols[4]?.trim().replace(/^["']|["']$/g, '') || 'Web') as any,
         notes: cols[5]?.trim().replace(/^["']|["']$/g, '') || null,
+        investment_amount: cols[6] ? Number(cols[6].trim().replace(/^["']|["']$/g, '').replace(/[$,]/g, '')) || 0 : 0,
         status: 'Nuevo',
         score: Math.floor(Math.random() * 40) + 50,
         agent_id: null,
@@ -299,6 +300,7 @@ export default function ProspectosPage() {
               <th className="p-4 text-xs font-bold text-kovex-muted uppercase tracking-wider">Email</th>
               <th className="p-4 text-xs font-bold text-kovex-muted uppercase tracking-wider">Teléfono</th>
               <th className="p-4 text-xs font-bold text-kovex-muted uppercase tracking-wider">País</th>
+              <th className="p-4 text-xs font-bold text-kovex-muted uppercase tracking-wider">Inversión</th>
               <th className="p-4 text-xs font-bold text-kovex-muted uppercase tracking-wider">Fuente</th>
               <th className="p-4 text-xs font-bold text-kovex-muted uppercase tracking-wider">Estado</th>
               <th className="p-4 text-xs font-bold text-kovex-muted uppercase tracking-wider">Agente</th>
@@ -309,11 +311,11 @@ export default function ProspectosPage() {
           <tbody>
             {store.loading ? (
               <tr>
-                <td colSpan={10} className="p-12 text-center text-kovex-muted text-xs">Cargando leads...</td>
+                <td colSpan={11} className="p-12 text-center text-kovex-muted text-xs">Cargando leads...</td>
               </tr>
             ) : filteredLeads.length === 0 ? (
               <tr>
-                <td colSpan={10} className="p-12 text-center text-kovex-muted text-xs">No se encontraron prospectos</td>
+                <td colSpan={11} className="p-12 text-center text-kovex-muted text-xs">No se encontraron prospectos</td>
               </tr>
             ) : (
               filteredLeads.map((lead) => {
@@ -344,6 +346,11 @@ export default function ProspectosPage() {
                     <td className="p-4 text-xs text-kovex-muted font-mono">{lead.phone || '—'}</td>
                     <td className="p-4 text-xs font-bold text-white">
                       <Badge variant="gray">{countriesShort[lead.country as keyof typeof countriesShort] || '—'}</Badge>
+                    </td>
+                    <td className="p-4 text-xs font-mono font-bold text-kovex-accent">
+                      {lead.investment_amount !== undefined && lead.investment_amount !== null
+                        ? `$${Number(lead.investment_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : '—'}
                     </td>
                     <td className="p-4 text-xs">
                       <Badge variant="gray">{lead.source}</Badge>
@@ -468,10 +475,10 @@ export default function ProspectosPage() {
               El archivo debe ser un <span className="font-mono text-kovex-accent">.csv</span> delimitado por comas (,) o punto y coma (;). El orden de las columnas debe ser:
             </p>
             <div className="font-mono bg-[#060b16] p-2 rounded border border-kovex-border text-center text-kovex-accent font-bold mt-1 overflow-x-auto whitespace-nowrap">
-              Nombre, Correo, Teléfono, País, Fuente, Notas
+              Nombre, Correo, Teléfono, País, Fuente, Notas, Inversión
             </div>
             <span className="text-[10px] text-kovex-muted block mt-1">
-              * Nota: Se ignorará la primera fila si contiene encabezados (ej. "Nombre", "Email").
+              * Nota: Se ignorará la primera fila si contiene encabezados (ej. "Nombre", "Email"). La columna de inversión es opcional (por defecto 0.00).
             </span>
           </div>
 
@@ -509,6 +516,7 @@ export default function ProspectosPage() {
                       <th className="p-2">Nombre</th>
                       <th className="p-2">Correo</th>
                       <th className="p-2">País</th>
+                      <th className="p-2">Inversión</th>
                       <th className="p-2">Fuente</th>
                     </tr>
                   </thead>
@@ -518,12 +526,15 @@ export default function ProspectosPage() {
                         <td className="p-2 font-bold text-white truncate max-w-[100px]">{l.full_name}</td>
                         <td className="p-2 text-kovex-muted truncate max-w-[100px]">{l.email}</td>
                         <td className="p-2 text-kovex-muted">{l.country}</td>
+                        <td className="p-2 font-mono font-bold text-kovex-accent">
+                          {l.investment_amount !== undefined ? `$${l.investment_amount}` : '$0.00'}
+                        </td>
                         <td className="p-2 text-kovex-muted">{l.source}</td>
                       </tr>
                     ))}
                     {parsedLeads.length > 10 && (
                       <tr>
-                        <td colSpan={4} className="p-2 text-center text-kovex-muted italic text-[10px]">
+                        <td colSpan={5} className="p-2 text-center text-kovex-muted italic text-[10px]">
                           ... y {parsedLeads.length - 10} filas más.
                         </td>
                       </tr>
