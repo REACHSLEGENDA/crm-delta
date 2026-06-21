@@ -38,6 +38,7 @@ export default function UsersPage() {
   const [deals, setDeals] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
+  const [selectedUserProfile, setSelectedUserProfile] = useState<Profile | null>(null);
   
   // Modals state
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -354,9 +355,12 @@ export default function UsersPage() {
                   return (
                     <tr key={user.id} className={`border-b border-kovex-border/30 hover:bg-white/[0.01] transition-all ${suspended ? 'opacity-50' : ''}`}>
                       <td className="p-4">
-                        <div className="flex items-center gap-3">
+                        <div 
+                          onClick={() => setSelectedUserProfile(user)}
+                          className="flex items-center gap-3 cursor-pointer group"
+                        >
                           <Avatar name={user.full_name} size="sm" />
-                          <span className="font-bold text-sm text-white">{user.full_name}</span>
+                          <span className="font-bold text-sm text-white group-hover:text-kovex-primary transition-colors">{user.full_name}</span>
                         </div>
                       </td>
                       <td className="p-4 text-xs text-kovex-muted font-mono">{user.email || (user.full_name.toLowerCase().replace(' ', '.') + '@delta.net')}</td>
@@ -392,6 +396,14 @@ export default function UsersPage() {
                       </td>
                       <td className="p-4">
                         <div className="flex items-center gap-2">
+                          {/* View Profile */}
+                          <button
+                            onClick={() => setSelectedUserProfile(user)}
+                            title="Ver Perfil Completo"
+                            className="p-1.5 bg-kovex-surface border border-kovex-border hover:border-kovex-primary/45 rounded-lg text-kovex-muted hover:text-white transition-all"
+                          >
+                            <User size={14} />
+                          </button>
                           {/* Suspend / Reactivate */}
                           <button
                             onClick={() => handleToggleSuspend(user.id, suspended)}
@@ -594,10 +606,13 @@ export default function UsersPage() {
                     return (
                       <tr key={user.id} className="border-b border-kovex-border/30 hover:bg-white/[0.01] transition-all">
                         <td className="p-4">
-                          <div className="flex items-center gap-3">
+                          <div 
+                            onClick={() => setSelectedUserProfile(user)}
+                            className="flex items-center gap-3 cursor-pointer group"
+                          >
                             <Avatar name={user.full_name} size="sm" />
                             <div className="flex flex-col">
-                              <span className="font-bold text-sm text-white">{user.full_name}</span>
+                              <span className="font-bold text-sm text-white group-hover:text-kovex-primary transition-colors">{user.full_name}</span>
                               <span className="text-[10px] text-kovex-muted font-mono">{user.email || (user.full_name.toLowerCase().replace(' ', '.') + '@delta.net')}</span>
                             </div>
                           </div>
@@ -751,6 +766,152 @@ export default function UsersPage() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* USER PROFILE DETAILS MODAL */}
+      <Modal
+        isOpen={selectedUserProfile !== null}
+        onClose={() => setSelectedUserProfile(null)}
+        title="Perfil del Colaborador"
+      >
+        {selectedUserProfile && (() => {
+          const user = selectedUserProfile;
+          const userLogs = attendanceLogs.filter(log => log.profile_id === user.id);
+          const latestLog = userLogs[0];
+          const isWorking = latestLog?.status === 'working';
+          
+          const userLeads = leads.filter(l => l.agent_id === user.id);
+          const userDeals = deals.filter(d => d.agent_id === user.id);
+          const wonDeals = userDeals.filter(d => d.stage === 'won');
+          
+          const userTotalMs = userLogs.reduce((sum, log) => {
+            const start = new Date(log.clock_in).getTime();
+            const end = log.clock_out ? new Date(log.clock_out).getTime() : new Date().getTime();
+            return sum + (end - start);
+          }, 0);
+          
+          const totalMins = Math.floor(userTotalMs / 60000);
+          const hrs = Math.floor(totalMins / 60);
+          const mins = totalMins % 60;
+          const formattedHours = `${hrs}h ${mins}m`;
+
+          const retainedAmount = wonDeals.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+          const conversionRate = userDeals.length > 0 ? ((wonDeals.length / userDeals.length) * 100).toFixed(1) : '0.0';
+
+          return (
+            <div className="space-y-6">
+              {/* Profile Card Header */}
+              <div className="flex items-center gap-4 bg-white/[0.015] border border-kovex-border/30 p-4 rounded-2xl">
+                <Avatar name={user.full_name} size="lg" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-display font-extrabold text-base text-white truncate">{user.full_name}</h3>
+                  <p className="text-xs text-kovex-muted font-mono truncate">{user.email || (user.full_name.toLowerCase().replace(' ', '.') + '@delta.net')}</p>
+                  <div className="flex gap-2 mt-2">
+                    <Badge variant="primary">{user.role}</Badge>
+                    <Badge variant="gray">{user.department || 'Sin Depto'}</Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid 2 Columns: Stats & Shift */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Column 1: Performance Stats */}
+                <div className="bg-[#0F1525]/30 border border-kovex-border/40 p-4 rounded-xl space-y-3">
+                  <h4 className="text-[10px] text-kovex-muted uppercase font-bold tracking-wider mb-1">Métricas de Rendimiento</h4>
+                  
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-kovex-muted">Prospectos Asignados</span>
+                    <span className="text-white font-bold font-mono">{userLeads.length} leads</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-kovex-muted">Tratos Totales / Won</span>
+                    <span className="text-white font-bold font-mono">{userDeals.length} / {wonDeals.length} won</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-kovex-muted">Conversión de Tratos</span>
+                    <span className="text-kovex-accent font-bold font-mono">{conversionRate}%</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-kovex-muted">Volumen Retenido</span>
+                    <span className="text-kovex-primary font-extrabold font-mono">
+                      {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'USD' }).format(retainedAmount)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Column 2: Shift Information */}
+                <div className="bg-[#0F1525]/30 border border-kovex-border/40 p-4 rounded-xl space-y-3">
+                  <h4 className="text-[10px] text-kovex-muted uppercase font-bold tracking-wider mb-1">Estado de Turno</h4>
+                  
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-kovex-muted">Estatus Diario</span>
+                    <Badge variant={isWorking ? 'warning' : latestLog ? 'success' : 'gray'}>
+                      {isWorking ? 'En Turno' : latestLog ? 'Fuera de Turno' : 'Sin Turno'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-kovex-muted">Horas Totales Hoy</span>
+                    <span className="text-kovex-accent font-bold font-mono">{formattedHours}</span>
+                  </div>
+                  {latestLog && (
+                    <>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-kovex-muted">Última Entrada</span>
+                        <span className="text-white font-mono">{new Date(latestLog.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      {latestLog.clock_out && (
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-kovex-muted">Última Salida</span>
+                          <span className="text-white font-mono">{new Date(latestLog.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Attendance Log History (Last 3 entries) */}
+              <div className="space-y-2">
+                <h4 className="text-[10px] text-kovex-muted uppercase font-bold tracking-wider">Historial Reciente de Asistencia</h4>
+                {userLogs.length === 0 ? (
+                  <p className="text-xs text-kovex-muted italic">No hay marcas de asistencia registradas para este colaborador.</p>
+                ) : (
+                  <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                    {userLogs.slice(0, 3).map((log) => {
+                      const logIsWorking = log.status === 'working';
+                      return (
+                        <div key={log.id} className="bg-kovex-surface/40 border border-kovex-border/30 p-2.5 rounded-xl flex items-center justify-between text-xs">
+                          <div className="flex flex-col">
+                            <span className="text-white font-medium">
+                              {new Date(log.clock_in).toLocaleDateString()}
+                            </span>
+                            <span className="text-[10px] text-kovex-muted font-mono mt-0.5">
+                              In: {new Date(log.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
+                              {log.clock_out ? ` · Out: ${new Date(log.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                            </span>
+                          </div>
+                          <Badge variant={logIsWorking ? 'warning' : 'success'}>
+                            {logIsWorking ? 'En curso' : 'Completado'}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Close Footer */}
+              <div className="pt-4 border-t border-kovex-border flex justify-end">
+                <button
+                  onClick={() => setSelectedUserProfile(null)}
+                  className="px-4 py-2 bg-kovex-primary hover:brightness-105 active:scale-[0.98] text-xs font-bold rounded-xl text-[#060b16] transition-all"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
 
       {/* CONFIRMATION MODAL */}
