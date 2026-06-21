@@ -421,13 +421,10 @@ export default function DashboardPage() {
     }
   };
 
-  const openPrintWindow = (title: string, htmlBody: string) => {
-    const win = window.open('', '_blank');
-    if (!win) return;
+  const buildPrintHTML = (title: string, htmlBody: string) => {
     const now = new Date().toLocaleString('es-MX', { dateStyle: 'long', timeStyle: 'short' });
-    win.document.write(`
-      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-      <title>${title} – Delta Capital</title>
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+      <title>${title} - Delta Capital</title>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -438,7 +435,7 @@ export default function DashboardPage() {
         .brand { font-size:18px; font-weight:900; letter-spacing:2px; }
         .brand-sub { font-size:9px; letter-spacing:4px; color:#c5a059; text-transform:uppercase; }
         .report-title { font-size:28px; font-weight:900; margin-bottom:4px; }
-        .report-date { font-size:11px; color:#dfc08099; }
+        .report-date { font-size:11px; color:rgba(223,192,128,0.6); }
         .badge { display:inline-block; background:#c5a059; color:#060b16; font-size:9px; font-weight:800; padding:3px 10px; border-radius:20px; letter-spacing:1px; text-transform:uppercase; margin-top:10px; }
         .content { padding: 32px 40px; }
         .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:32px; }
@@ -451,7 +448,6 @@ export default function DashboardPage() {
         thead th { padding:10px 14px; font-weight:700; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.5px; }
         tbody tr:nth-child(odd) { background:#f9f6f1; }
         tbody tr:nth-child(even) { background:#fff; }
-        tbody tr:hover { background:#f0ebe0; }
         td { padding:9px 14px; color:#333; border-bottom:1px solid #ece6d8; }
         .status-pill { display:inline-block; padding:2px 8px; border-radius:20px; font-size:9px; font-weight:700; text-transform:uppercase; }
         .status-activo { background:#d1fae5; color:#065f46; }
@@ -462,51 +458,46 @@ export default function DashboardPage() {
         @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
       </style></head><body>
       <div class="header">
-        <div class="logo-row">
-          <div class="logo-circle">DC</div>
-          <div><div class="brand">DELTA CAPITAL</div><div class="brand-sub">Holding Street</div></div>
-        </div>
+        <div class="logo-row"><div class="logo-circle">DC</div><div><div class="brand">DELTA CAPITAL</div><div class="brand-sub">Holding Street</div></div></div>
         <div class="report-title">${title}</div>
         <div class="report-date">Generado el ${now}</div>
         <div class="badge">Reporte Oficial</div>
       </div>
       <div class="content">${htmlBody}</div>
       <div class="footer">
-        <span>© ${new Date().getFullYear()} Delta Capital &amp; Holding Street – Confidencial</span>
-        <span>CRM Delta Capital – Generado automáticamente</span>
+        <span>&copy; ${new Date().getFullYear()} Delta Capital &amp; Holding Street - Confidencial</span>
+        <span>CRM Delta Capital - Generado automaticamente</span>
       </div>
-      <script>window.onload=()=>{ window.print(); }<\/script>
-      </body></html>
-    `);
-    win.document.close();
+      <script>window.onload=function(){ window.print(); }<\/script>
+      </body></html>`;
+  };
+
+  const triggerPrintBlob = (title: string, htmlBody: string) => {
+    const html = buildPrintHTML(title, htmlBody);
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
 
   const handleExportLeadsPDF = async () => {
     const { data: leads } = await supabase.from('leads').select('*');
     if (!leads || leads.length === 0) { addToast({ title: 'Sin datos', description: 'No hay prospectos para exportar.', type: 'error' }); return; }
     const kpiHtml = `
-      <div class="kpi-grid" style="margin-bottom:28px">
+      <div class="kpi-grid">
         <div class="kpi-card"><div class="kpi-label">Total Prospectos</div><div class="kpi-value">${leads.length}</div></div>
         <div class="kpi-card"><div class="kpi-label">Activos</div><div class="kpi-value">${leads.filter((l:any)=>l.status==='activo').length}</div></div>
         <div class="kpi-card"><div class="kpi-label">Cerrados</div><div class="kpi-value">${leads.filter((l:any)=>l.status==='cerrado').length}</div></div>
         <div class="kpi-card"><div class="kpi-label">Inv. Total</div><div class="kpi-value">$${leads.reduce((s:number,l:any)=>s+(parseFloat(l.investment_amount)||0),0).toLocaleString('en-US',{minimumFractionDigits:0})}</div></div>
       </div>`;
-    const rows = leads.map((l:any) => `<tr>
-      <td>${l.full_name||''}</td>
-      <td>${l.email||''}</td>
-      <td>${l.phone||''}</td>
-      <td>${l.country||''}</td>
-      <td>$${parseFloat(l.investment_amount||0).toLocaleString('en-US')}</td>
-      <td>${l.source||''}</td>
-      <td><span class="status-pill status-${l.status||'activo'}">${l.status||''}</span></td>
-      <td>${l.score||0}</td>
-      <td>${new Date(l.created_at).toLocaleDateString('es-MX')}</td>
-    </tr>`).join('');
-    openPrintWindow('Reporte de Prospectos', `
-      ${kpiHtml}
-      <div class="section-title">Listado de Prospectos</div>
-      <table><thead><tr><th>Nombre</th><th>Email</th><th>Teléfono</th><th>País</th><th>Inversión</th><th>Fuente</th><th>Estado</th><th>Score</th><th>Fecha</th></tr></thead><tbody>${rows}</tbody></table>
-    `);
+    const rows = leads.map((l:any) => `<tr><td>${l.full_name||''}</td><td>${l.email||''}</td><td>${l.phone||''}</td><td>${l.country||''}</td><td>$${parseFloat(l.investment_amount||0).toLocaleString('en-US')}</td><td>${l.source||''}</td><td><span class="status-pill status-${l.status||'activo'}">${l.status||''}</span></td><td>${l.score||0}</td><td>${new Date(l.created_at).toLocaleDateString('es-MX')}</td></tr>`).join('');
+    triggerPrintBlob('Reporte de Prospectos', `${kpiHtml}<div class="section-title">Listado de Prospectos</div><table><thead><tr><th>Nombre</th><th>Email</th><th>Telefono</th><th>Pais</th><th>Inversion</th><th>Fuente</th><th>Estado</th><th>Score</th><th>Fecha</th></tr></thead><tbody>${rows}</tbody></table>`);
   };
 
   const handleExportDealsPDF = async () => {
@@ -514,46 +505,25 @@ export default function DashboardPage() {
     if (!deals || deals.length === 0) { addToast({ title: 'Sin datos', description: 'No hay negociaciones para exportar.', type: 'error' }); return; }
     const total = deals.reduce((s:number,d:any)=>s+(parseFloat(d.amount)||0),0);
     const kpiHtml = `
-      <div class="kpi-grid" style="margin-bottom:28px">
+      <div class="kpi-grid">
         <div class="kpi-card"><div class="kpi-label">Total Deals</div><div class="kpi-value">${deals.length}</div></div>
         <div class="kpi-card"><div class="kpi-label">Monto Total</div><div class="kpi-value">$${total.toLocaleString('en-US')}</div></div>
         <div class="kpi-card"><div class="kpi-label">Calientes</div><div class="kpi-value">${deals.filter((d:any)=>d.temperature==='hot').length}</div></div>
         <div class="kpi-card"><div class="kpi-label">Promedio</div><div class="kpi-value">$${deals.length>0?Math.round(total/deals.length).toLocaleString('en-US'):'0'}</div></div>
       </div>`;
-    const rows = deals.map((d:any)=>`<tr>
-      <td>${d.id?.slice(0,8)}...</td>
-      <td>${d.stage||''}</td>
-      <td>$${parseFloat(d.amount||0).toLocaleString('en-US')}</td>
-      <td>${d.temperature||''}</td>
-      <td>${d.expected_close?new Date(d.expected_close).toLocaleDateString('es-MX'):''}</td>
-      <td>${new Date(d.created_at).toLocaleDateString('es-MX')}</td>
-    </tr>`).join('');
-    openPrintWindow('Reporte de Negociaciones', `
-      ${kpiHtml}
-      <div class="section-title">Pipeline de Negociaciones</div>
-      <table><thead><tr><th>ID</th><th>Etapa</th><th>Monto</th><th>Temperatura</th><th>Cierre Estimado</th><th>Creado</th></tr></thead><tbody>${rows}</tbody></table>
-    `);
+    const rows = deals.map((d:any)=>`<tr><td>${d.id?.slice(0,8)}...</td><td>${d.stage||''}</td><td>$${parseFloat(d.amount||0).toLocaleString('en-US')}</td><td>${d.temperature||''}</td><td>${d.expected_close?new Date(d.expected_close).toLocaleDateString('es-MX'):''}</td><td>${new Date(d.created_at).toLocaleDateString('es-MX')}</td></tr>`).join('');
+    triggerPrintBlob('Reporte de Negociaciones', `${kpiHtml}<div class="section-title">Pipeline de Negociaciones</div><table><thead><tr><th>ID</th><th>Etapa</th><th>Monto</th><th>Temperatura</th><th>Cierre Estimado</th><th>Creado</th></tr></thead><tbody>${rows}</tbody></table>`);
   };
 
   const handleExportKPIsPDF = () => {
     const kpiHtml = `
-      <div class="kpi-grid" style="margin-bottom:28px">
+      <div class="kpi-grid">
         <div class="kpi-card"><div class="kpi-label">Total Prospectos</div><div class="kpi-value">${kpis.totalLeads}</div></div>
         <div class="kpi-card"><div class="kpi-label">Negocios Activos</div><div class="kpi-value">${kpis.activeDeals}</div></div>
         <div class="kpi-card"><div class="kpi-label">Tasa de Cierre</div><div class="kpi-value">${kpis.winRate}</div></div>
         <div class="kpi-card"><div class="kpi-label">Revenue Proyectado</div><div class="kpi-value">${kpis.revenue}</div></div>
       </div>`;
-    openPrintWindow('Resumen Ejecutivo de KPIs', `
-      ${kpiHtml}
-      <div class="section-title">Detalle de Métricas</div>
-      <table><thead><tr><th>Métrica</th><th>Valor</th></tr></thead><tbody>
-        <tr><td>Total Prospectos</td><td>${kpis.totalLeads}</td></tr>
-        <tr><td>Negocios Activos</td><td>${kpis.activeDeals}</td></tr>
-        <tr><td>Tasa de Cierre</td><td>${kpis.winRate}</td></tr>
-        <tr><td>Revenue Proyectado</td><td>${kpis.revenue}</td></tr>
-        <tr><td>Fecha de Reporte</td><td>${new Date().toLocaleString('es-MX')}</td></tr>
-      </tbody></table>
-    `);
+    triggerPrintBlob('Resumen Ejecutivo de KPIs', `${kpiHtml}<div class="section-title">Detalle de Metricas</div><table><thead><tr><th>Metrica</th><th>Valor</th></tr></thead><tbody><tr><td>Total Prospectos</td><td>${kpis.totalLeads}</td></tr><tr><td>Negocios Activos</td><td>${kpis.activeDeals}</td></tr><tr><td>Tasa de Cierre</td><td>${kpis.winRate}</td></tr><tr><td>Revenue Proyectado</td><td>${kpis.revenue}</td></tr><tr><td>Fecha de Reporte</td><td>${new Date().toLocaleString('es-MX')}</td></tr></tbody></table>`);
   };
 
   const handleAddTask = (e: React.FormEvent) => {
