@@ -173,6 +173,45 @@ export default function UsersPage() {
     });
   };
 
+  const handleDeleteUser = (id: string, fullName: string) => {
+    setConfirmText(`¿Deseas eliminar permanentemente a "${fullName}" de la base de datos? Esta acción es irreversible y eliminará su cuenta de autenticación y su perfil.`);
+    setConfirmAction(() => async () => {
+      try {
+        if (isRealSupabase) {
+          const { error } = await supabase.rpc('delete_user_by_admin', { target_user_id: id });
+          if (error) throw error;
+        } else {
+          // Delete from mock profiles
+          await supabase.from('profiles').delete().eq('id', id);
+          
+          // Also delete from mock users
+          const mockUsersKey = 'kovex_v6_mock_users';
+          const mockUsers = JSON.parse(localStorage.getItem(mockUsersKey) || '[]');
+          const filteredMockUsers = mockUsers.filter((u: any) => u.id !== id);
+          localStorage.setItem(mockUsersKey, JSON.stringify(filteredMockUsers));
+        }
+
+        setUsers(users.filter((u) => u.id !== id));
+        addToast({
+          title: 'Usuario eliminado',
+          description: `El usuario "${fullName}" ha sido eliminado de la base de datos.`,
+          type: 'success',
+        });
+        setConfirmOpen(false);
+      } catch (err: any) {
+        console.error(err);
+        addToast({
+          title: 'Error al eliminar',
+          description: err.message || 'No se pudo eliminar el usuario.',
+          type: 'error',
+        });
+        setConfirmOpen(false);
+      }
+    });
+    setConfirmOpen(true);
+  };
+
+
   const handleInviteUser = async () => {
     if (!inviteFullName.trim() || !inviteEmail.trim() || !invitePassword.trim()) {
       addToast({
@@ -419,6 +458,14 @@ export default function UsersPage() {
                             className="p-1.5 bg-kovex-surface border border-kovex-border hover:border-kovex-accent/45 rounded-lg text-kovex-muted hover:text-white transition-all"
                           >
                             <Lock size={14} />
+                          </button>
+                          {/* Delete User */}
+                          <button
+                            onClick={() => handleDeleteUser(user.id, user.full_name)}
+                            title="Eliminar de la Base de Datos"
+                            className="p-1.5 bg-kovex-surface border border-kovex-border hover:bg-kovex-danger/10 hover:border-kovex-danger/45 rounded-lg text-kovex-muted hover:text-kovex-danger transition-all"
+                          >
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
