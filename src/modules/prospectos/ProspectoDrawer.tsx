@@ -1,11 +1,13 @@
 // modules/prospectos/ProspectoDrawer.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Drawer from '@/components/shared/Drawer';
 import Badge from '@/components/shared/Badge';
 import Avatar from '@/components/shared/Avatar';
 import { Lead } from '@/types';
 import { useProspectosStore } from './useProspectos';
 import { useNotificationsStore } from '@/store/notificationsStore';
+import { useAuthStore } from '@/store/authStore';
+import { usePermissions } from '@/hooks/usePermissions';
 import { 
   Phone, Mail, Globe, User, Calendar, FileText, 
   Trash2, Edit, CheckCircle, UserCheck, MessageSquare 
@@ -23,11 +25,83 @@ export default function ProspectoDrawer({ leadId, isOpen, onClose, onEdit }: Pro
   const leads = useProspectosStore((state) => state.leads);
   const deleteLead = useProspectosStore((state) => state.deleteLead);
   const addToast = useNotificationsStore((state) => state.addToast);
+  const profile = useAuthStore((state) => state.profile);
+  const permissions = usePermissions();
+  const [agents, setAgents] = useState<{ id: string; name: string }[]>([]);
   
   const [activeTab, setActiveTab] = useState<'info' | 'activity' | 'notes' | 'files'>('info');
   const [newNote, setNewNote] = useState('');
+  const [comments, setComments] = useState<any[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+
+  useEffect(() => {
+    async function loadAgents() {
+      const { data, error } = await supabase.from('profiles').select('id, full_name');
+      if (!error && data) {
+        setAgents(data.map((p: any) => ({ id: p.id, name: p.full_name })));
+      }
+    }
+    if (isOpen) {
+      loadAgents();
+    }
+  }, [isOpen]);
 
   const lead = leads.find((l) => l.id === leadId);
+
+  const loadComments = async () => {
+    if (!lead?.id) return;
+    setLoadingComments(true);
+    try {
+      const { data, error } = await supabase
+        .from('lead_comments')
+        .select('*')
+        .eq('lead_id', lead.id)
+        .order('created_at', { ascending: false });
+      if (!error && data) {
+        setComments(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && lead?.id) {
+      loadComments();
+    }
+  }, [isOpen, lead?.id]);
+
+  const handleSaveComment = async () => {
+    if (!newNote.trim() || !profile || !lead) return;
+    try {
+      const { error } = await supabase
+        .from('lead_comments')
+        .insert({
+          lead_id: lead.id,
+          content: newNote,
+          author_id: profile.id
+        });
+      if (!error) {
+        addToast({
+          title: 'Comentario guardado',
+          description: 'La nota de seguimiento fue agregada correctamente.',
+          type: 'success',
+        });
+        setNewNote('');
+        loadComments();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const getAgentName = (id: string | null) => {
+    if (!id) return 'Sistema';
+    const found = agents.find((a) => a.id === id);
+    return found ? found.name : 'Cargando...';
+  };
 
   if (!lead) return null;
 
@@ -96,24 +170,30 @@ export default function ProspectoDrawer({ leadId, isOpen, onClose, onEdit }: Pro
       headerIcon={<Avatar name={lead.full_name} />}
       footerActions={
         <>
-          <button
-            onClick={handleDelete}
-            className="flex items-center gap-1.5 px-3 py-2 border border-kovex-danger/20 hover:bg-kovex-danger/5 rounded-xl text-xs font-bold text-kovex-danger transition-colors"
-          >
-            <Trash2 size={14} /> Eliminar
-          </button>
-          <button
-            onClick={() => onEdit(lead)}
-            className="flex items-center gap-1.5 px-3 py-2 border border-kovex-border hover:bg-white/[0.02] rounded-xl text-xs font-bold text-white transition-colors"
-          >
-            <Edit size={14} /> Editar
-          </button>
-          <button
-            onClick={handleConvertToDeal}
-            className="flex items-center gap-1.5 px-3 py-2 bg-kovex-primary hover:brightness-105 rounded-xl text-xs font-bold text-white transition-all"
-          >
-            Convertir a Negocio
-          </button>
+          {permissions.canDeleteLead && (
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-1.5 px-3 py-2 border border-kovex-danger/20 hover:bg-kovex-danger/5 rounded-xl text-xs font-bold text-kovex-danger transition-colors"
+            >
+              <Trash2 size={14} /> Eliminar
+            </button>
+          )}
+          {permissions.canEditLead(lead.agent_id) && (
+            <button
+              onClick={() => onEdit(lead)}
+              className="flex items-center gap-1.5 px-3 py-2 border border-kovex-border hover:bg-white/[0.02] rounded-xl text-xs font-bold text-white transition-colors"
+            >
+              <Edit size={14} /> Editar
+            </button>
+          )}
+          {permissions.canCreateDeal && (
+            <button
+              onClick={handleConvertToDeal}
+              className="flex items-center gap-1.5 px-3 py-2 bg-kovex-primary hover:brightness-105 rounded-xl text-xs font-bold text-white transition-all"
+            >
+              Convertir a Negocio
+            </button>
+          )}
         </>
       }
     >
@@ -158,7 +238,7 @@ export default function ProspectoDrawer({ leadId, isOpen, onClose, onEdit }: Pro
             <div className="flex items-center justify-between text-xs">
               <span className="text-kovex-muted flex items-center gap-1.5"><User size={12} /> Agente</span>
               <span className="text-white font-medium">
-                {lead.agent_id === '00000000-0000-0000-0000-000000000003' ? 'Carlos Méndez' : lead.agent_id === '00000000-0000-0000-0000-000000000004' ? 'Valeria Soto' : 'Sin asignar'}
+                {agents.find(a => a.id === lead.agent_id)?.name || 'Sin asignar'}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
@@ -195,36 +275,41 @@ export default function ProspectoDrawer({ leadId, isOpen, onClose, onEdit }: Pro
         <div className="space-y-4">
           <div className="space-y-2">
             <textarea
-              placeholder="Escribe una nota rápida aquí..."
+              placeholder="Escribe comentarios de conducta, estatus o notas de seguimiento aquí..."
               value={newNote}
               onChange={(e) => setNewNote(e.target.value)}
-              className="w-full bg-kovex-bg border border-kovex-border focus:border-kovex-primary/50 text-white rounded-xl p-3 text-xs outline-none resize-none"
+              className="w-full bg-[#060b16] border border-kovex-border focus:border-kovex-primary/50 text-white rounded-xl p-3 text-xs outline-none resize-none"
               rows={3}
             />
             <button
-              onClick={() => {
-                if (newNote.trim()) {
-                  addToast({ title: 'Nota guardada', description: 'La nota fue guardada en el historial.', type: 'success' });
-                  setNewNote('');
-                }
-              }}
-              className="bg-kovex-elevated hover:bg-white/[0.04] border border-kovex-border text-white text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all"
+              onClick={handleSaveComment}
+              className="bg-kovex-primary hover:brightness-105 text-[#060b16] text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all"
             >
-              Guardar Nota
+              Guardar Nota de Seguimiento
             </button>
           </div>
           
           <div className="space-y-3">
-            <h5 className="text-[10px] text-kovex-muted uppercase font-bold tracking-wider">Historial de notas</h5>
-            <div className="bg-kovex-surface/20 border border-kovex-border p-3 rounded-xl text-xs">
-              <div className="font-bold text-white flex justify-between">
-                <span>Ana Quintero</span>
-                <span className="text-[10px] text-kovex-muted">Ayer</span>
+            <h5 className="text-[10px] text-kovex-muted uppercase font-bold tracking-wider">Historial de Seguimiento</h5>
+            {loadingComments ? (
+              <div className="text-center text-xs text-kovex-muted py-4">Cargando comentarios...</div>
+            ) : comments.length === 0 ? (
+              <div className="text-center text-xs text-kovex-muted py-4">No hay notas de seguimiento registradas.</div>
+            ) : (
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                {comments.map((c) => (
+                  <div key={c.id} className="bg-kovex-surface/40 border border-kovex-border p-3 rounded-xl text-xs space-y-1">
+                    <div className="font-bold text-white flex justify-between items-center">
+                      <span className="text-kovex-primary">{getAgentName(c.author_id)}</span>
+                      <span className="text-[9px] text-kovex-muted">{new Date(c.created_at).toLocaleString()}</span>
+                    </div>
+                    <p className="text-kovex-text leading-relaxed mt-1 break-words">
+                      {c.content}
+                    </p>
+                  </div>
+                ))}
               </div>
-              <p className="text-kovex-muted mt-1 leading-relaxed">
-                Hablé con él, está buscando un apalancamiento mínimo de 1:200.
-              </p>
-            </div>
+            )}
           </div>
         </div>
       )}

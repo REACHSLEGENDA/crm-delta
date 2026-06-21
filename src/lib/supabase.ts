@@ -14,35 +14,30 @@ const isRealSupabase =
 
 // Mock Data Initial Seeds
 const MOCK_PROFILES = [
-  { id: 'f82fb25d-c6e1-4e16-ad4d-ed3813359800', full_name: 'Kovex Admin', role: 'SUPERADMIN', status: 'online', avatar_url: null },
-  { id: '00000000-0000-0000-0000-000000000001', full_name: 'Diego Ramírez', role: 'SUPERADMIN', status: 'online', avatar_url: null },
-  { id: '00000000-0000-0000-0000-000000000002', full_name: 'Ana Quintero', role: 'MANAGER', status: 'online', avatar_url: null },
-  { id: '00000000-0000-0000-0000-000000000003', full_name: 'Carlos Méndez', role: 'AGENTE', status: 'online', avatar_url: null },
-  { id: '00000000-0000-0000-0000-000000000004', full_name: 'Valeria Soto', role: 'AGENTE', status: 'ocupado', avatar_url: null },
-  { id: '00000000-0000-0000-0000-000000000005', full_name: 'Isabel Paredes', role: 'SUPERVISOR', status: 'online', avatar_url: null },
+  { id: 'f82fb25d-c6e1-4e16-ad4d-ed3813359800', full_name: 'Delta Admin', role: 'SUPERADMIN', status: 'online', avatar_url: null, email: 'kovex.net@gmail.com', department: 'gerente' },
+  { id: '00000000-0000-0000-0000-000000000001', full_name: 'Diego Ramírez', role: 'SUPERADMIN', status: 'online', avatar_url: null, email: 'superadmin@kovex.net', department: 'gerente' },
+  { id: '00000000-0000-0000-0000-000000000002', full_name: 'Ana Quintero', role: 'MANAGER', status: 'online', avatar_url: null, email: 'manager@kovex.net', department: 'gerente' },
+  { id: '00000000-0000-0000-0000-000000000003', full_name: 'Carlos Méndez', role: 'AGENTE', status: 'online', avatar_url: null, email: 'agente1@kovex.net', department: 'ventas' },
+  { id: '00000000-0000-0000-0000-000000000004', full_name: 'Valeria Soto', role: 'AGENTE', status: 'ocupado', avatar_url: null, email: 'agente2@kovex.net', department: 'retencion' },
+  { id: '00000000-0000-0000-0000-000000000005', full_name: 'Isabel Paredes', role: 'SUPERVISOR', status: 'online', avatar_url: null, email: 'supervisor@kovex.net', department: 'ventas' },
 ];
 
 const MOCK_LEADS: any[] = [];
-
 const MOCK_DEALS: any[] = [];
-
 const MOCK_CONTACTS: any[] = [];
-
 const MOCK_ACTIVITIES: any[] = [];
-
 const MOCK_AUTOMATIONS: any[] = [];
-
 const MOCK_RULES: any[] = [];
-
 const MOCK_CHANNELS = [
   { id: 'chan-1', name: 'general', type: 'public', members: [] },
   { id: 'chan-2', name: 'ventas-mx', type: 'public', members: [] },
   { id: 'chan-3', name: 'alertas', type: 'system', members: [] },
 ];
-
 const MOCK_MESSAGES: any[] = [];
-
 const MOCK_CALLS: any[] = [];
+const MOCK_ATTENDANCE: any[] = [];
+const MOCK_LEGAL_FILES: any[] = [];
+const MOCK_LEAD_COMMENTS: any[] = [];
 
 // Initialize LocalStorage with seed data if not present
 const getOrSetLocal = (key: string, seed: any) => {
@@ -57,16 +52,19 @@ const getOrSetLocal = (key: string, seed: any) => {
 // Ensure all data structures are loaded
 const initializeLocalDb = () => {
   if (typeof window === 'undefined') return;
-  getOrSetLocal('kovex_v4_profiles', MOCK_PROFILES);
-  getOrSetLocal('kovex_v4_leads', MOCK_LEADS);
-  getOrSetLocal('kovex_v4_deals', MOCK_DEALS);
-  getOrSetLocal('kovex_v4_contacts', MOCK_CONTACTS);
-  getOrSetLocal('kovex_v4_activities', MOCK_ACTIVITIES);
-  getOrSetLocal('kovex_v4_automations', MOCK_AUTOMATIONS);
-  getOrSetLocal('kovex_v4_rules', MOCK_RULES);
-  getOrSetLocal('kovex_v4_channels', MOCK_CHANNELS);
-  getOrSetLocal('kovex_v4_messages', MOCK_MESSAGES);
-  getOrSetLocal('kovex_v4_calls', MOCK_CALLS);
+  getOrSetLocal('kovex_v5_profiles', MOCK_PROFILES);
+  getOrSetLocal('kovex_v5_leads', MOCK_LEADS);
+  getOrSetLocal('kovex_v5_deals', MOCK_DEALS);
+  getOrSetLocal('kovex_v5_contacts', MOCK_CONTACTS);
+  getOrSetLocal('kovex_v5_activities', MOCK_ACTIVITIES);
+  getOrSetLocal('kovex_v5_automations', MOCK_AUTOMATIONS);
+  getOrSetLocal('kovex_v5_rules', MOCK_RULES);
+  getOrSetLocal('kovex_v5_channels', MOCK_CHANNELS);
+  getOrSetLocal('kovex_v5_messages', MOCK_MESSAGES);
+  getOrSetLocal('kovex_v5_calls', MOCK_CALLS);
+  getOrSetLocal('kovex_v5_attendance', MOCK_ATTENDANCE);
+  getOrSetLocal('kovex_v5_legal_files', MOCK_LEGAL_FILES);
+  getOrSetLocal('kovex_v5_lead_comments', MOCK_LEAD_COMMENTS);
 };
 
 initializeLocalDb();
@@ -85,15 +83,15 @@ const mockSupabase = {
   auth: {
     signInWithPassword: ({ email, password }: any) => {
       const defaultUsers = [
-        { email: 'kovex.net@gmail.com', password: '@Kovex3412s', role: 'SUPERADMIN', name: 'Kovex Admin', id: 'f82fb25d-c6e1-4e16-ad4d-ed3813359800' },
-        { email: 'superadmin@kovex.net', password: 'Kovex2025!', role: 'SUPERADMIN', name: 'Diego Ramírez', id: '00000000-0000-0000-0000-000000000001' },
-        { email: 'manager@kovex.net', password: 'Kovex2025!', role: 'MANAGER', name: 'Ana Quintero', id: '00000000-0000-0000-0000-000000000002' },
-        { email: 'agente1@kovex.net', password: 'Kovex2025!', role: 'AGENTE', name: 'Carlos Méndez', id: '00000000-0000-0000-0000-000000000003' },
-        { email: 'agente2@kovex.net', password: 'Kovex2025!', role: 'AGENTE', name: 'Valeria Soto', id: '00000000-0000-0000-0000-000000000004' },
-        { email: 'supervisor@kovex.net', password: 'Kovex2025!', role: 'SUPERVISOR', name: 'Isabel Paredes', id: '00000000-0000-0000-0000-000000000005' },
+        { email: 'kovex.net@gmail.com', password: '@Kovex3412s', role: 'SUPERADMIN', name: 'Delta Admin', id: 'f82fb25d-c6e1-4e16-ad4d-ed3813359800', department: 'gerente' },
+        { email: 'superadmin@kovex.net', password: 'Kovex2025!', role: 'SUPERADMIN', name: 'Diego Ramírez', id: '00000000-0000-0000-0000-000000000001', department: 'gerente' },
+        { email: 'manager@kovex.net', password: 'Kovex2025!', role: 'MANAGER', name: 'Ana Quintero', id: '00000000-0000-0000-0000-000000000002', department: 'gerente' },
+        { email: 'agente1@kovex.net', password: 'Kovex2025!', role: 'AGENTE', name: 'Carlos Méndez', id: '00000000-0000-0000-0000-000000000003', department: 'ventas' },
+        { email: 'agente2@kovex.net', password: 'Kovex2025!', role: 'AGENTE', name: 'Valeria Soto', id: '00000000-0000-0000-0000-000000000004', department: 'retencion' },
+        { email: 'supervisor@kovex.net', password: 'Kovex2025!', role: 'SUPERVISOR', name: 'Isabel Paredes', id: '00000000-0000-0000-0000-000000000005', department: 'ventas' },
       ];
       
-      const registeredUsers = getCollection('kovex_v4_mock_users') || [];
+      const registeredUsers = getCollection('kovex_v5_mock_users') || [];
       const users = [...defaultUsers, ...registeredUsers];
       
       const found = users.find(u => u.email === email);
@@ -103,7 +101,7 @@ const mockSupabase = {
           user: {
             id: found.id,
             email: found.email,
-            user_metadata: { full_name: found.name, role: found.role }
+            user_metadata: { full_name: found.name, role: found.role, department: found.department }
           }
         };
         localStorage.setItem('kovex_session', JSON.stringify(session));
@@ -112,7 +110,7 @@ const mockSupabase = {
       return Promise.resolve({ data: { user: null, session: null }, error: { message: 'Credenciales incorrectas' } });
     },
     signUp: ({ email, password, options }: any) => {
-      const usersKey = 'kovex_v4_mock_users';
+      const usersKey = 'kovex_v5_mock_users';
       const users = getCollection(usersKey) || [];
       
       if (users.some((u: any) => u.email === email)) {
@@ -121,26 +119,29 @@ const mockSupabase = {
       
       const id = crypto.randomUUID();
       const role = options?.data?.role || 'AGENTE';
+      const department = options?.data?.department || 'ventas';
       const name = options?.data?.full_name || email;
-      const newUser = { email, password, role, name, id };
+      const newUser = { email, password, role, name, id, department };
       
       users.push(newUser);
       saveCollection(usersKey, users);
 
       // Create a profile in mock storage
-      const profiles = getCollection('kovex_v4_profiles');
+      const profiles = getCollection('kovex_v5_profiles');
       profiles.push({
         id,
         full_name: name,
         role,
         status: 'online',
-        avatar_url: null
+        avatar_url: null,
+        email,
+        department
       });
-      saveCollection('kovex_v4_profiles', profiles);
+      saveCollection('kovex_v5_profiles', profiles);
 
       return Promise.resolve({
         data: {
-          user: { id, email, user_metadata: { full_name: name, role } },
+          user: { id, email, user_metadata: { full_name: name, role, department } },
           session: null
         },
         error: null
@@ -156,82 +157,90 @@ const mockSupabase = {
       return Promise.resolve({ data: { session }, error: null });
     },
     onAuthStateChange: (callback: any) => {
-      // Return unsubscribe mock
       return { data: { subscription: { unsubscribe: () => {} } } };
     }
   },
   from: (table: string) => {
-    const key = `kovex_v4_${table}`;
+    const key = `kovex_v5_${table}`;
+    
+    const buildChain = (currentData: any[]) => {
+      const builder: any = {
+        eq: (field: string, val: any) => {
+          const filtered = currentData.filter((item: any) => item[field] === val);
+          return buildChain(filtered);
+        },
+        order: (field: string, { ascending = true } = {}) => {
+          const sorted = [...currentData].sort((a: any, b: any) => {
+            if (a[field] < b[field]) return ascending ? -1 : 1;
+            if (a[field] > b[field]) return ascending ? 1 : -1;
+            return 0;
+          });
+          return buildChain(sorted);
+        },
+        single: () => mockResponse(currentData[0] || null),
+        then: (cb: any) => cb({ data: currentData, error: null })
+      };
+      
+      // Make it a thenable itself
+      builder.then = (cb: any) => cb({ data: currentData, error: null });
+      return builder;
+    };
+
     return {
       select: (columns = '*') => {
-        const data = getCollection(key);
+        let data = getCollection(key);
         
         // Handle join simulated references
         if (table === 'deals') {
-          const leads = getCollection('kovex_v4_leads');
+          const leads = getCollection('kovex_v5_leads');
           data.forEach((deal: any) => {
             deal.lead = leads.find((l: any) => l.id === deal.lead_id);
           });
         }
         
-        return {
-          eq: (field: string, val: any) => {
-            const filtered = data.filter((item: any) => item[field] === val);
-            return {
-              single: () => mockResponse(filtered[0] || null),
-              order: () => mockResponse(filtered),
-              then: (cb: any) => cb({ data: filtered, error: null })
-            };
-          },
-          order: (field: string, { ascending = true } = {}) => {
-            const sorted = [...data].sort((a: any, b: any) => {
-              if (a[field] < b[field]) return ascending ? -1 : 1;
-              if (a[field] > b[field]) return ascending ? 1 : -1;
-              return 0;
-            });
-            return {
-              then: (cb: any) => cb({ data: sorted, error: null })
-            };
-          },
-          then: (cb: any) => cb({ data, error: null })
-        };
+        return buildChain(data);
       },
       insert: (record: any) => {
         const data = getCollection(key);
-        const newRecord = { 
-          id: crypto.randomUUID(), 
-          created_at: new Date().toISOString(), 
-          ...record 
-        };
-        data.unshift(newRecord);
+        const recordsToInsert = Array.isArray(record) ? record : [record];
+        const newRecords = recordsToInsert.map((r: any) => ({
+          id: r.id || crypto.randomUUID(),
+          created_at: r.created_at || new Date().toISOString(),
+          ...r
+        }));
+        
+        data.unshift(...newRecords);
         saveCollection(key, data);
         
         // Log activity automatically
-        if (table !== 'activities') {
+        if (table !== 'activities' && table !== 'attendance') {
           const session = JSON.parse(localStorage.getItem('kovex_session') || '{}');
-          const acts = getCollection('kovex_v4_activities');
-          acts.unshift({
-            id: crypto.randomUUID(),
-            entity_type: table.replace(/s$/, ''),
-            entity_id: newRecord.id,
-            type: 'created',
-            description: `Se creó un registro en la tabla ${table}: ${newRecord.full_name || newRecord.name || newRecord.id}`,
-            created_by: session.user?.id || null,
-            created_at: new Date().toISOString()
+          const acts = getCollection('kovex_v5_activities');
+          newRecords.forEach((newRec: any) => {
+            acts.unshift({
+              id: crypto.randomUUID(),
+              entity_type: table.replace(/s$/, ''),
+              entity_id: newRec.id,
+              type: 'created',
+              description: `Se creó un registro en la tabla ${table}: ${newRec.full_name || newRec.name || newRec.id}`,
+              created_by: session.user?.id || null,
+              created_at: new Date().toISOString()
+            });
           });
-          saveCollection('kovex_v4_activities', acts);
+          saveCollection('kovex_v5_activities', acts);
         }
         
-        return mockResponse([newRecord]);
+        return mockResponse(Array.isArray(record) ? newRecords : newRecords[0]);
       },
       update: (updates: any) => {
         return {
           eq: (field: string, val: any) => {
             const data = getCollection(key);
-            let updatedRecord: any = null;
+            let updatedRecords: any[] = [];
             const updated = data.map((item: any) => {
               if (item[field] === val) {
-                updatedRecord = { ...item, ...updates, updated_at: new Date().toISOString() };
+                const updatedRecord = { ...item, ...updates, updated_at: new Date().toISOString() };
+                updatedRecords.push(updatedRecord);
                 return updatedRecord;
               }
               return item;
@@ -239,22 +248,24 @@ const mockSupabase = {
             saveCollection(key, updated);
             
             // Log activity
-            if (table !== 'activities' && updatedRecord) {
+            if (table !== 'activities' && table !== 'attendance' && updatedRecords.length > 0) {
               const session = JSON.parse(localStorage.getItem('kovex_session') || '{}');
-              const acts = getCollection('kovex_v4_activities');
-              acts.unshift({
-                id: crypto.randomUUID(),
-                entity_type: table.replace(/s$/, ''),
-                entity_id: updatedRecord.id,
-                type: 'updated',
-                description: `Se actualizó el registro en la tabla ${table}: ${updatedRecord.full_name || updatedRecord.name || updatedRecord.id}`,
-                created_by: session.user?.id || null,
-                created_at: new Date().toISOString()
+              const acts = getCollection('kovex_v5_activities');
+              updatedRecords.forEach((updatedRecord: any) => {
+                acts.unshift({
+                  id: crypto.randomUUID(),
+                  entity_type: table.replace(/s$/, ''),
+                  entity_id: updatedRecord.id,
+                  type: 'updated',
+                  description: `Se actualizó el registro en la tabla ${table}: ${updatedRecord.full_name || updatedRecord.name || updatedRecord.id}`,
+                  created_by: session.user?.id || null,
+                  created_at: new Date().toISOString()
+                });
               });
-              saveCollection('kovex_v4_activities', acts);
+              saveCollection('kovex_v5_activities', acts);
             }
             
-            return mockResponse(updatedRecord ? [updatedRecord] : []);
+            return mockResponse(updatedRecords);
           }
         };
       },
@@ -275,7 +286,6 @@ const mockSupabase = {
       on: (event: string, config: any, callback: any) => {
         return {
           subscribe: () => {
-            // Setup a interval to simulate periodic updates (like incoming messages)
             return {
               unsubscribe: () => {}
             };

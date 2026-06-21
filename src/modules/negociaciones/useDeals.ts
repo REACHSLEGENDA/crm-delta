@@ -1,6 +1,7 @@
 // modules/negociaciones/useDeals.ts
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/store/authStore';
 import { Deal } from '@/types';
 
 interface DealsState {
@@ -19,7 +20,15 @@ export const useDealsStore = create<DealsState>((set, get) => ({
   fetchDeals: async () => {
     set({ loading: true });
     try {
-      const { data, error } = await supabase.from('deals').select('*').order('created_at', { ascending: false });
+      const profile = useAuthStore.getState().profile;
+      const isSalesOrRetentionAgent = profile?.role === 'AGENTE' && (profile?.department === 'ventas' || profile?.department === 'retencion');
+      
+      let query = supabase.from('deals').select('*');
+      if (isSalesOrRetentionAgent && profile?.id) {
+        query = query.eq('agent_id', profile.id);
+      }
+      
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (!error) {
         set({ deals: data || [] });
       }

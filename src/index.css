@@ -17,11 +17,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(233, 30, 140, 0.15);
+  background: rgba(197, 160, 89, 0.15);
   border-radius: 99px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(233, 30, 140, 0.35);
+  background: rgba(197, 160, 89, 0.35);
 }
 
 /* Custom form checkbox override */

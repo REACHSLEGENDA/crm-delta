@@ -25,6 +25,7 @@ export default function ContactosPage() {
   const [activeContactId, setActiveContactId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [contactDeals, setContactDeals] = useState<Deal[]>([]);
+  const [agents, setAgents] = useState<{ id: string; name: string }[]>([]);
 
   // Duplicate state
   const [duplicateEmails, setDuplicateEmails] = useState<string[]>([]);
@@ -46,6 +47,13 @@ export default function ContactosPage() {
 
   useEffect(() => {
     fetchContacts();
+    async function loadAgents() {
+      const { data, error } = await supabase.from('profiles').select('id, full_name');
+      if (!error && data) {
+        setAgents(data.map((p: any) => ({ id: p.id, name: p.full_name })));
+      }
+    }
+    loadAgents();
   }, []);
 
   const detectDuplicates = (list: Contact[]) => {
@@ -69,12 +77,9 @@ export default function ContactosPage() {
   const activeContact = contacts.find((c) => c.id === activeContactId);
 
   const getAgentName = (id: string | null) => {
-    switch (id) {
-      case '00000000-0000-0000-0000-000000000003': return 'Carlos Méndez';
-      case '00000000-0000-0000-0000-000000000004': return 'Valeria Soto';
-      case '00000000-0000-0000-0000-000000000001': return 'Diego Ramírez';
-      default: return 'Sin asignar';
-    }
+    if (!id) return 'Sin asignar';
+    const found = agents.find((a) => a.id === id);
+    return found ? found.name : 'Cargando...';
   };
 
   // Filter contacts

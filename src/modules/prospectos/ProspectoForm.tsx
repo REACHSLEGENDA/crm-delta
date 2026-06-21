@@ -1,11 +1,12 @@
 // modules/prospectos/ProspectoForm.tsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Lead } from '@/types';
 import { useProspectosStore } from './useProspectos';
 import { useNotificationsStore } from '@/store/notificationsStore';
+import { supabase } from '@/lib/supabase';
 
 const leadFormSchema = z.object({
   full_name: z.string().min(2, { message: 'El nombre es obligatorio' }),
@@ -29,6 +30,7 @@ export default function ProspectoForm({ lead, onClose }: ProspectoFormProps) {
   const createLead = useProspectosStore((state) => state.createLead);
   const updateLead = useProspectosStore((state) => state.updateLead);
   const addToast = useNotificationsStore((state) => state.addToast);
+  const [agents, setAgents] = useState<{ id: string; name: string }[]>([]);
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<LeadFormFields>({
     resolver: zodResolver(leadFormSchema),
@@ -39,10 +41,20 @@ export default function ProspectoForm({ lead, onClose }: ProspectoFormProps) {
       country: 'México',
       source: 'Web',
       status: 'Nuevo',
-      agent_id: '00000000-0000-0000-0000-000000000003', // default agent (Carlos)
+      agent_id: null,
       notes: '',
     }
   });
+
+  useEffect(() => {
+    async function loadAgents() {
+      const { data, error } = await supabase.from('profiles').select('id, full_name');
+      if (!error && data) {
+        setAgents(data.map((p: any) => ({ id: p.id, name: p.full_name })));
+      }
+    }
+    loadAgents();
+  }, []);
 
   useEffect(() => {
     if (lead) {
@@ -109,13 +121,6 @@ export default function ProspectoForm({ lead, onClose }: ProspectoFormProps) {
   const countries = ['México', 'Colombia', 'Argentina', 'Chile', 'Perú'];
   const sources = ['WhatsApp', 'Web', 'Referido', 'Llamada'];
   const statuses = ['Nuevo', 'Contactado', 'Calificado', 'Descartado'];
-  
-  // Simulated Agents list
-  const agents = [
-    { id: '00000000-0000-0000-0000-000000000003', name: 'Carlos Méndez' },
-    { id: '00000000-0000-0000-0000-000000000004', name: 'Valeria Soto' },
-    { id: '00000000-0000-0000-0000-000000000001', name: 'Diego Ramírez' },
-  ];
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 text-kovex-text">

@@ -11,6 +11,7 @@ export interface Profile {
   last_seen?: string;
   team_id?: string | null;
   email?: string;
+  department?: 'ventas' | 'retencion' | 'cumplimiento' | 'gerente' | null;
 }
 
 export interface Lead {

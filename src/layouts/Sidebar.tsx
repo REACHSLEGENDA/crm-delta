@@ -4,8 +4,8 @@ import { useUIStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
 import { usePermissions } from '@/hooks/usePermissions';
 import { 
-  LayoutDashboard, UserPlus, GitBranch, Users, Zap, Filter, 
-  PhoneCall, MessageSquare, ShieldAlert, LogOut, ChevronLeft, ChevronRight, Settings2 
+  LayoutDashboard, UserPlus, GitBranch, Users, 
+  PhoneCall, MessageSquare, ShieldAlert, LogOut, ChevronLeft, ChevronRight, Settings2, FileText
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -35,15 +35,10 @@ export default function Sidebar() {
         { id: 'prospectos', label: 'Prospectos', icon: UserPlus, allowed: true },
         { id: 'negociaciones', label: 'Negociaciones', icon: GitBranch, allowed: true },
         { id: 'contactos', label: 'Contactos', icon: Users, allowed: true },
+        { id: 'cumplimiento', label: 'Cumplimiento', icon: FileText, allowed: permissions.canAccessCompliance },
       ]
     },
-    {
-      label: 'Automatización',
-      items: [
-        { id: 'automatizacion', label: 'Flujos', icon: Zap, allowed: permissions.canAccessAutomations },
-        { id: 'reglas', label: 'Reglas', icon: Filter, allowed: permissions.canAccessRules },
-      ]
-    },
+
     {
       label: 'Comunicación',
       items: [
@@ -75,13 +70,11 @@ export default function Sidebar() {
       {/* Brand Logo */}
       <div className="flex items-center justify-between p-5 border-b border-kovex-border">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-kovex-primary to-[#7B0E55] flex items-center justify-center flex-shrink-0 font-display font-extrabold text-xl text-white shadow-[0_4px_14px_rgba(233,30,140,0.25)]">
-            K
-          </div>
+          <img src="/delta.png" alt="Delta Logo" className="w-10 h-10 object-contain flex-shrink-0" />
           {!collapsed && (
             <div className="flex flex-col leading-none">
-              <span className="font-display font-extrabold text-base tracking-wider text-white">KOVEX</span>
-              <span className="text-[9px] text-kovex-muted tracking-[2px] uppercase mt-0.5">CRM v1.0</span>
+              <span className="font-display font-extrabold text-base tracking-wider text-white">DELTA CAPITAL</span>
+              <span className="text-[9px] text-kovex-muted tracking-[2px] uppercase mt-0.5">Holding Street</span>
             </div>
           )}
         </div>
@@ -139,7 +132,7 @@ export default function Sidebar() {
       <div className="p-4 border-t border-kovex-border bg-black/10 relative">
         <div className="flex items-center gap-3">
           <div className="relative cursor-pointer" onClick={() => setShowStatusDropdown(!showStatusDropdown)}>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-kovex-primary to-[#7B0E55] flex items-center justify-center font-bold text-sm text-white select-none">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-kovex-primary to-kovex-accent flex items-center justify-center font-bold text-sm text-white select-none">
               {profile ? getInitials(profile.full_name) : 'U'}
             </div>
             <span
@@ -151,7 +144,7 @@ export default function Sidebar() {
 
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <h4 className="text-xs font-bold text-white truncate">{profile?.full_name || 'Diego Ramírez'}</h4>
+              <h4 className="text-xs font-bold text-white truncate">{profile?.full_name || 'Delta Admin'}</h4>
               <span className="text-[10px] text-kovex-muted font-semibold uppercase tracking-wider block mt-0.5">
                 {profile?.role || 'SUPERADMIN'}
               </span>

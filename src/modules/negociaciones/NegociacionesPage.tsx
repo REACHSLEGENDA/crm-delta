@@ -8,6 +8,7 @@ import Badge from '@/components/shared/Badge';
 import { Plus, GitBranch, RefreshCw, Layers } from 'lucide-react';
 import { Deal } from '@/types';
 import { useNotificationsStore } from '@/store/notificationsStore';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const STAGES = [
   { id: 'lead', name: 'Nuevo Lead', color: '#60A5FA' },
@@ -23,6 +24,7 @@ export default function NegociacionesPage() {
   const store = useDealsStore();
   const leadsStore = useProspectosStore();
   const addToast = useNotificationsStore((state) => state.addToast);
+  const permissions = usePermissions();
 
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -55,13 +57,23 @@ export default function NegociacionesPage() {
     if (!dealId) return;
 
     const deal = store.deals.find((d) => d.id === dealId);
-    if (deal && deal.stage !== targetStage) {
-      await store.updateDealStage(dealId, targetStage);
-      addToast({
-        title: 'Etapa Actualizada',
-        description: `${deal.lead?.full_name || 'Negociación'} movida a ${STAGES.find((s) => s.id === targetStage)?.name}.`,
-        type: 'success',
-      });
+    if (deal) {
+      if (!permissions.canEditDeal(deal.agent_id)) {
+        addToast({
+          title: 'Acceso Denegado',
+          description: 'No tienes permisos para modificar negociaciones.',
+          type: 'error',
+        });
+        return;
+      }
+      if (deal.stage !== targetStage) {
+        await store.updateDealStage(dealId, targetStage);
+        addToast({
+          title: 'Etapa Actualizada',
+          description: `${deal.lead?.full_name || 'Negociación'} movida a ${STAGES.find((s) => s.id === targetStage)?.name}.`,
+          type: 'success',
+        });
+      }
     }
   };
 
@@ -128,16 +140,19 @@ export default function NegociacionesPage() {
                 ) : (
                   colDeals.map((deal) => {
                     const days = Math.floor(Math.random() * 8) + 1; // Simulated days in stage
+                    const canEdit = permissions.canEditDeal(deal.agent_id);
                     return (
                       <div
                         key={deal.id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, deal.id)}
+                        draggable={canEdit}
+                        onDragStart={(e) => canEdit ? handleDragStart(e, deal.id) : e.preventDefault()}
                         onClick={() => {
                           setActiveDealId(deal.id);
                           setDrawerOpen(true);
                         }}
-                        className="bg-kovex-surface hover:bg-kovex-surface/80 border border-kovex-border rounded-xl p-3.5 hover:border-kovex-primary/40 transition-all cursor-grab active:cursor-grabbing relative overflow-hidden shadow-lg"
+                        className={`bg-kovex-surface hover:bg-kovex-surface/80 border border-kovex-border rounded-xl p-3.5 hover:border-kovex-primary/40 transition-all relative overflow-hidden shadow-lg ${
+                          canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+                        }`}
                       >
                         <div className="flex justify-between items-start gap-2">
                           <h4 className="text-xs font-bold text-white leading-snug line-clamp-1 truncate max-w-[150px]">

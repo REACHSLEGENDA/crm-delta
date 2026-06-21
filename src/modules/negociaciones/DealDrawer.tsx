@@ -1,15 +1,17 @@
 // modules/negociaciones/DealDrawer.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Drawer from '@/components/shared/Drawer';
 import Badge from '@/components/shared/Badge';
 import Avatar from '@/components/shared/Avatar';
 import { Deal } from '@/types';
 import { useDealsStore } from './useDeals';
 import { useNotificationsStore } from '@/store/notificationsStore';
+import { usePermissions } from '@/hooks/usePermissions';
 import { 
   Phone, Mail, DollarSign, Calendar, FileText, 
   Trash2, User, ChevronRight, CheckSquare, Clock 
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 interface DealDrawerProps {
   dealId: string | null;
@@ -21,8 +23,22 @@ export default function DealDrawer({ dealId, isOpen, onClose }: DealDrawerProps)
   const deals = useDealsStore((state) => state.deals);
   const deleteDeal = useDealsStore((state) => state.deleteDeal);
   const addToast = useNotificationsStore((state) => state.addToast);
+  const permissions = usePermissions();
+  const [agents, setAgents] = useState<{ id: string; name: string }[]>([]);
   
   const [activeTab, setActiveTab] = useState<'summary' | 'activity' | 'tasks' | 'history'>('summary');
+
+  useEffect(() => {
+    async function loadAgents() {
+      const { data, error } = await supabase.from('profiles').select('id, full_name');
+      if (!error && data) {
+        setAgents(data.map((p: any) => ({ id: p.id, name: p.full_name })));
+      }
+    }
+    if (isOpen) {
+      loadAgents();
+    }
+  }, [isOpen]);
 
   const deal = deals.find((d) => d.id === dealId);
 
@@ -51,12 +67,9 @@ export default function DealDrawer({ dealId, isOpen, onClose }: DealDrawerProps)
   };
 
   const getAgentName = (id: string | null) => {
-    switch (id) {
-      case '00000000-0000-0000-0000-000000000003': return 'Carlos Méndez';
-      case '00000000-0000-0000-0000-000000000004': return 'Valeria Soto';
-      case '00000000-0000-0000-0000-000000000001': return 'Diego Ramírez';
-      default: return 'Sin asignar';
-    }
+    if (!id) return 'Sin asignar';
+    const found = agents.find((a) => a.id === id);
+    return found ? found.name : 'Cargando...';
   };
 
   const tempLabels = {
@@ -80,12 +93,14 @@ export default function DealDrawer({ dealId, isOpen, onClose }: DealDrawerProps)
       headerIcon={<Avatar name={deal.lead?.full_name || 'Trato'} />}
       footerActions={
         <>
-          <button
-            onClick={handleDelete}
-            className="flex items-center gap-1.5 px-3 py-2 border border-kovex-danger/20 hover:bg-kovex-danger/5 rounded-xl text-xs font-bold text-kovex-danger transition-colors"
-          >
-            <Trash2 size={14} /> Eliminar Trato
-          </button>
+          {permissions.canDeleteDeal && (
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-1.5 px-3 py-2 border border-kovex-danger/20 hover:bg-kovex-danger/5 rounded-xl text-xs font-bold text-kovex-danger transition-colors"
+            >
+              <Trash2 size={14} /> Eliminar Trato
+            </button>
+          )}
           <button
             onClick={onClose}
             className="px-4 py-2 bg-kovex-elevated hover:bg-white/[0.04] border border-kovex-border text-xs font-bold rounded-xl text-white transition-all"

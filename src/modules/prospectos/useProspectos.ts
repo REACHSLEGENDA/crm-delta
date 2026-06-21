@@ -1,8 +1,9 @@
 // modules/prospectos/useProspectos.ts
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/store/authStore';
 import { Lead } from '@/types';
-
+ 
 interface ProspectosState {
   leads: Lead[];
   loading: boolean;
@@ -25,7 +26,7 @@ interface ProspectosState {
   batchUpdateAgent: (agentId: string | null) => Promise<void>;
   batchUpdateStatus: (status: Lead['status']) => Promise<void>;
 }
-
+ 
 export const useProspectosStore = create<ProspectosState>((set, get) => ({
   leads: [],
   loading: false,
@@ -34,11 +35,19 @@ export const useProspectosStore = create<ProspectosState>((set, get) => ({
   filterStatus: [],
   filterSource: [],
   filterAgent: '',
-
+ 
   fetchLeads: async () => {
     set({ loading: true });
     try {
-      const { data, error } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
+      const profile = useAuthStore.getState().profile;
+      const isSalesOrRetentionAgent = profile?.role === 'AGENTE' && (profile?.department === 'ventas' || profile?.department === 'retencion');
+      
+      let query = supabase.from('leads').select('*');
+      if (isSalesOrRetentionAgent && profile?.id) {
+        query = query.eq('agent_id', profile.id);
+      }
+      
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (!error) {
         set({ leads: data || [] });
       }

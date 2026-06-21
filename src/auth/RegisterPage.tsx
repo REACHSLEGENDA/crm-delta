@@ -13,6 +13,7 @@ const registerSchema = z.object({
   email: z.string().email({ message: 'Ingresa un correo electrónico válido' }),
   password: z.string().min(6, { message: 'La contraseña debe tener al menos 6 caracteres' }),
   role: z.enum(['SUPERADMIN', 'MANAGER', 'SUPERVISOR', 'AGENTE']),
+  department: z.enum(['ventas', 'retencion', 'cumplimiento', 'gerente']),
 });
 
 type RegisterFields = z.infer<typeof registerSchema>;
@@ -33,6 +34,7 @@ export default function RegisterPage() {
       email: '',
       password: '',
       role: 'AGENTE',
+      department: 'ventas',
     }
   });
 
@@ -56,7 +58,7 @@ export default function RegisterPage() {
         speedX: (Math.random() - 0.5) * 0.6,
         speedY: (Math.random() - 0.5) * 0.6,
         radius: Math.random() * 2 + 1,
-        color: Math.random() > 0.5 ? '#E91E8C' : '#00E5CC',
+        color: Math.random() > 0.5 ? '#c5a059' : '#dfc080',
       });
     }
 
@@ -129,13 +131,14 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterFields) => {
     setLoading(true);
     try {
-      const { data: authData, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
           data: {
             full_name: data.fullName,
             role: data.role,
+            department: data.department,
           }
         }
       });
@@ -180,11 +183,9 @@ export default function RegisterPage() {
 
       {/* Floating Header */}
       <div className="absolute top-8 left-8 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-kovex-primary to-[#7B0E55] flex items-center justify-center font-display font-extrabold text-lg text-white shadow-[0_4px_16px_rgba(233,30,140,0.25)]">
-          K
-        </div>
+        <img src="/delta.png" alt="Delta Logo" className="w-9 h-9 object-contain flex-shrink-0" />
         <div>
-          <span className="font-display font-extrabold text-sm tracking-wider block leading-none text-white">KOVEX</span>
+          <span className="font-display font-extrabold text-sm tracking-wider block leading-none text-white">DELTA CAPITAL</span>
           <span className="text-[9px] text-kovex-muted tracking-[2px] uppercase">Control Panel</span>
         </div>
       </div>
@@ -198,12 +199,12 @@ export default function RegisterPage() {
         {!success ? (
           <>
             <div className="mb-6">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold text-kovex-accent bg-kovex-accent/10 border border-kovex-accent/20 mb-3 uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold text-kovex-accent bg-kovex-primary/10 border border-kovex-primary/20 mb-3 uppercase tracking-wider">
                 <Shield size={10} /> Registro Restringido
               </span>
               <h2 className="font-display font-extrabold text-2xl text-white tracking-tight">Alta de Usuarios</h2>
               <p className="text-kovex-muted text-xs mt-1">
-                Registra una nueva cuenta en la base de datos con asignación de rol.
+                Registra una nueva cuenta en la base de datos con asignación de rol y departamento.
               </p>
             </div>
 
@@ -278,31 +279,49 @@ export default function RegisterPage() {
                 )}
               </div>
 
-              {/* Role Selection */}
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-kovex-muted uppercase tracking-wider">
-                  Rol del Sistema
-                </label>
-                <select
-                  {...register('role')}
-                  className="w-full bg-kovex-surface border border-kovex-border focus:border-kovex-primary/50 text-white rounded-xl py-2.5 px-3 text-xs outline-none transition-all focus:ring-4 focus:ring-kovex-primary/10 cursor-pointer"
-                >
-                  <option value="AGENTE">AGENTE (Vendedor / Operador)</option>
-                  <option value="SUPERVISOR">SUPERVISOR (Mesa / Teléfono)</option>
-                  <option value="MANAGER">MANAGER (Director Comercial)</option>
-                  <option value="SUPERADMIN">SUPERADMIN (Administración Total)</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Role Selection */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-kovex-muted uppercase tracking-wider">
+                    Rol
+                  </label>
+                  <select
+                    {...register('role')}
+                    className="w-full bg-kovex-surface border border-kovex-border focus:border-kovex-primary/50 text-white rounded-xl py-2.5 px-3 text-xs outline-none transition-all focus:ring-4 focus:ring-kovex-primary/10 cursor-pointer"
+                  >
+                    <option value="AGENTE">AGENTE</option>
+                    <option value="SUPERVISOR">SUPERVISOR</option>
+                    <option value="MANAGER">MANAGER</option>
+                    <option value="SUPERADMIN">SUPERADMIN</option>
+                  </select>
+                </div>
+
+                {/* Department Selection */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-kovex-muted uppercase tracking-wider">
+                    Departamento
+                  </label>
+                  <select
+                    {...register('department')}
+                    className="w-full bg-kovex-surface border border-kovex-border focus:border-kovex-primary/50 text-white rounded-xl py-2.5 px-3 text-xs outline-none transition-all focus:ring-4 focus:ring-kovex-primary/10 cursor-pointer"
+                  >
+                    <option value="ventas">Ventas</option>
+                    <option value="retencion">Retención</option>
+                    <option value="cumplimiento">Cumplimiento</option>
+                    <option value="gerente">Gerencia</option>
+                  </select>
+                </div>
               </div>
 
               {/* Submit Button */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-kovex-primary to-[#C2156F] hover:brightness-105 active:scale-[0.99] text-white font-bold py-3 px-4 rounded-xl transition-all shadow-[0_4px_16px_rgba(233,30,140,0.25)] flex items-center justify-center gap-2 text-xs mt-6"
+                className="w-full bg-gradient-to-r from-kovex-primary to-kovex-accent hover:brightness-105 active:scale-[0.99] text-[#060b16] font-bold py-3 px-4 rounded-xl transition-all shadow-[0_4px_16px_rgba(197,160,89,0.25)] flex items-center justify-center gap-2 text-xs mt-6"
               >
                 {loading ? (
                   <>
-                    <Loader2 size={14} className="animate-spin" /> Registrando usuario...
+                    <Loader2 size={14} className="animate-spin text-[#060b16]" /> Registrando usuario...
                   </>
                 ) : (
                   'Registrar Nuevo Usuario'
@@ -317,7 +336,7 @@ export default function RegisterPage() {
             </div>
             <h2 className="font-display font-extrabold text-xl text-white tracking-tight">¡Registro Exitoso!</h2>
             <p className="text-kovex-muted text-xs mt-2 px-4 leading-relaxed">
-              El usuario ha sido registrado y su perfil público fue creado correctamente con el rol especificado.
+              El usuario ha sido registrado y su perfil público fue creado correctamente con el rol y departamento especificados.
             </p>
             <div className="mt-8 flex flex-col gap-3">
               <button
@@ -328,7 +347,7 @@ export default function RegisterPage() {
               </button>
               <button
                 onClick={() => navigate('/login')}
-                className="w-full bg-gradient-to-r from-kovex-primary to-[#C2156F] hover:brightness-105 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all"
+                className="w-full bg-gradient-to-r from-kovex-primary to-kovex-accent hover:brightness-105 text-[#060b16] font-bold py-2.5 px-4 rounded-xl text-xs transition-all"
               >
                 Ir a Iniciar Sesión
               </button>

@@ -29,8 +29,8 @@ export default function LoginPage() {
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFields>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: 'kovex.net@gmail.com',
-      password: '@Kovex3412s',
+      email: '',
+      password: '',
       remember: true,
     }
   });
@@ -55,7 +55,7 @@ export default function LoginPage() {
 
     const particles: Array<{ x: number; y: number; speedX: number; speedY: number; radius: number; color: string }> = [];
 
-    // Create particles
+    // Create particles (using gold/bronze palette)
     for (let i = 0; i < 40; i++) {
       particles.push({
         x: Math.random() * width,
@@ -63,7 +63,7 @@ export default function LoginPage() {
         speedX: (Math.random() - 0.5) * 0.8,
         speedY: (Math.random() - 0.5) * 0.8,
         radius: Math.random() * 2 + 1,
-        color: Math.random() > 0.5 ? '#E91E8C' : '#00E5CC',
+        color: Math.random() > 0.5 ? '#c5a059' : '#dfc080',
       });
     }
 
@@ -95,8 +95,8 @@ export default function LoginPage() {
         ctx.stroke();
       }
 
-      // Draw simulated market chart line in background
-      ctx.strokeStyle = 'rgba(233, 30, 140, 0.08)';
+      // Draw simulated market chart line in background (Gold/Bronze)
+      ctx.strokeStyle = 'rgba(197, 160, 89, 0.08)';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(0, height * 0.7);
@@ -150,7 +150,7 @@ export default function LoginPage() {
     if (res.success) {
       addToast({
         title: 'Acceso concedido',
-        description: '¡Bienvenido de vuelta a KOVEX CRM!',
+        description: '¡Bienvenido de vuelta a DELTA CAPITAL!',
         type: 'success',
       });
       navigate('/');
@@ -166,29 +166,27 @@ export default function LoginPage() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 h-screen w-screen bg-kovex-bg text-kovex-text font-body overflow-hidden">
       {/* BRAND PANEL - LEFT */}
-      <div className="relative hidden md:flex flex-col justify-between p-12 bg-gradient-to-b from-[#0E1322] via-kovex-bg to-[#080B14] border-r border-kovex-border overflow-hidden">
+      <div className="relative hidden md:flex flex-col justify-between p-12 bg-gradient-to-b from-[#060b16] via-[#0c1222] to-[#141d33] border-r border-kovex-border overflow-hidden">
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
         
         {/* Top brand */}
         <div className="flex items-center gap-3 relative z-10">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-kovex-primary to-[#7B0E55] flex items-center justify-center font-display font-extrabold text-xl text-white shadow-[0_4px_20px_rgba(233,30,140,0.35)]">
-            K
-          </div>
+          <img src="/delta.png" alt="Delta Logo" className="w-10 h-10 object-contain flex-shrink-0" />
           <div>
-            <span className="font-display font-extrabold text-lg tracking-wider block leading-none text-white">KOVEX</span>
-            <span className="text-[10px] text-kovex-muted tracking-[3px] uppercase">Trading Suite</span>
+            <span className="font-display font-extrabold text-lg tracking-wider block leading-none text-white">DELTA CAPITAL</span>
+            <span className="text-[10px] text-kovex-muted tracking-[3px] uppercase">Holding Street</span>
           </div>
         </div>
 
         {/* Center content */}
         <div className="max-w-md relative z-10 my-auto">
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-kovex-accent bg-kovex-accent/10 border border-kovex-accent/20 mb-6 uppercase tracking-wider">
-            <span className="w-2 h-2 rounded-full bg-kovex-accent animate-pulse" />
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-kovex-accent bg-kovex-primary/10 border border-kovex-primary/20 mb-6 uppercase tracking-wider">
+            <span className="w-2 h-2 rounded-full bg-kovex-primary animate-pulse" />
             Mesa de trading activa
           </span>
           <h1 className="font-display font-extrabold text-4xl lg:text-5xl leading-tight tracking-tight text-white mb-6">
             El centro de control de tu{' '}
-            <span className="bg-gradient-to-r from-kovex-primary to-[#FF7AC2] bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-kovex-primary to-[#dfc080] bg-clip-text text-transparent">
               mesa de trading.
             </span>
           </h1>
@@ -214,7 +212,7 @@ export default function LoginPage() {
 
         {/* Foot info */}
         <div className="flex justify-between items-center text-xs text-kovex-muted relative z-10">
-          <span>© 2026 KOVEX Markets</span>
+          <span>© 2026 DELTA CAPITAL & Holding Street</span>
           <div className="flex gap-4">
             <span className="flex items-center gap-1"><ShieldCheck size={14} className="text-kovex-accent" /> SOC 2</span>
             <span>Cifrado E2E</span>
@@ -232,7 +230,7 @@ export default function LoginPage() {
           <div className="mb-8">
             <h2 className="font-display font-extrabold text-3xl text-white tracking-tight">Bienvenido</h2>
             <p className="text-kovex-muted text-sm mt-2">
-              Ingresa tus credenciales para acceder a tu panel KOVEX.
+              Ingresa tus credenciales para acceder a tu panel DELTA CAPITAL.
             </p>
           </div>
 
@@ -304,11 +302,11 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-kovex-primary to-[#C2156F] hover:brightness-105 active:scale-[0.99] text-white font-bold py-3 px-4 rounded-xl transition-all shadow-[0_4px_16px_rgba(233,30,140,0.25)] flex items-center justify-center gap-2"
+              className="w-full bg-gradient-to-r from-kovex-primary to-kovex-accent hover:brightness-105 active:scale-[0.99] text-[#060b16] font-bold py-3 px-4 rounded-xl transition-all shadow-[0_4px_16px_rgba(197,160,89,0.25)] flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
-                  <Loader2 size={16} className="animate-spin" /> Verificando acceso...
+                  <Loader2 size={16} className="animate-spin text-[#060b16]" /> Verificando acceso...
                 </>
               ) : (
                 'Iniciar Sesión'

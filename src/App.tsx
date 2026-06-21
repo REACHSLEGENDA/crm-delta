@@ -14,6 +14,7 @@ import ReglasPage from '@/modules/reglas/ReglasPage';
 import ContactCenterPage from '@/modules/contact-center/ContactCenterPage';
 import ChatPage from '@/modules/chat/ChatPage';
 import UsersPage from '@/modules/admin/UsersPage';
+import CumplimientoPage from '@/modules/cumplimiento/CumplimientoPage';
 import ToastContainer from '@/components/shared/Toast';
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/prospectos" element={<ProspectosPage />} />
             <Route path="/negociaciones" element={<NegociacionesPage />} />
             <Route path="/contactos" element={<ContactosPage />} />
+            <Route path="/cumplimiento" element={<CumplimientoPage />} />
             <Route path="/automatizacion" element={<AutomatizacionPage />} />
             <Route path="/reglas" element={<ReglasPage />} />
             <Route path="/contactcenter" element={<ContactCenterPage />} />

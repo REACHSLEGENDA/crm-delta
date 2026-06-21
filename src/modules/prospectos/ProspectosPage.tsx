@@ -6,11 +6,18 @@ import ProspectoDrawer from './ProspectoDrawer';
 import Badge from '@/components/shared/Badge';
 import Avatar from '@/components/shared/Avatar';
 import Modal from '@/components/shared/Modal';
-import { Plus, Search, Filter, Trash2, UserCheck, RefreshCw, X, ChevronRight } from 'lucide-react';
+import { Plus, Search, Filter, Trash2, UserCheck, RefreshCw, X, ChevronRight, Upload, FileSpreadsheet } from 'lucide-react';
 import { Lead } from '@/types';
+import { supabase } from '@/lib/supabase';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useNotificationsStore } from '@/store/notificationsStore';
 
 export default function ProspectosPage() {
   const store = useProspectosStore();
+  const permissions = usePermissions();
+  const addToast = useNotificationsStore((state) => state.addToast);
+  
+  const [agents, setAgents] = useState<{ id: string; name: string }[]>([]);
   
   // Local states
   const [formOpen, setFormOpen] = useState(false);
@@ -20,10 +27,91 @@ export default function ProspectosPage() {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   
   const [batchActionOpen, setBatchActionOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [parsedLeads, setParsedLeads] = useState<any[]>([]);
+  const [importingLeads, setImportingLeads] = useState(false);
 
   useEffect(() => {
     store.fetchLeads();
+    async function loadAgents() {
+      const { data, error } = await supabase.from('profiles').select('id, full_name');
+      if (!error && data) {
+        setAgents(data.map((p: any) => ({ id: p.id, name: p.full_name })));
+      }
+    }
+    loadAgents();
   }, []);
+
+  const parseCSV = (text: string) => {
+    const lines = text.split('\n');
+    const parsed: any[] = [];
+    
+    // Check if there is header row and find indices
+    const headerLine = lines[0].toLowerCase();
+    const isHeaderPresent = headerLine.includes('nombre') || headerLine.includes('name') || headerLine.includes('email') || headerLine.includes('correo');
+    const startIndex = isHeaderPresent ? 1 : 0;
+    
+    for (let i = startIndex; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
+      const cols = line.includes(';') ? line.split(';') : line.split(',');
+      if (cols.length < 2) continue; // Needs name and email at least
+      
+      parsed.push({
+        full_name: cols[0]?.trim().replace(/^["']|["']$/g, '') || 'Sin Nombre',
+        email: cols[1]?.trim().replace(/^["']|["']$/g, '') || '',
+        phone: cols[2]?.trim().replace(/^["']|["']$/g, '') || null,
+        country: cols[3]?.trim().replace(/^["']|["']$/g, '') || 'México',
+        source: (cols[4]?.trim().replace(/^["']|["']$/g, '') || 'Web') as any,
+        notes: cols[5]?.trim().replace(/^["']|["']$/g, '') || null,
+        status: 'Nuevo',
+        score: Math.floor(Math.random() * 40) + 50,
+        agent_id: null,
+        tags: []
+      });
+    }
+    setParsedLeads(parsed);
+  };
+
+  const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      parseCSV(text);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleConfirmImport = async () => {
+    if (parsedLeads.length === 0) return;
+    setImportingLeads(true);
+    try {
+      const { data, error } = await supabase.from('leads').insert(parsedLeads);
+      if (!error) {
+        addToast({
+          title: 'Importación exitosa',
+          description: `Se han importado ${parsedLeads.length} prospectos correctamente.`,
+          type: 'success',
+        });
+        setImportModalOpen(false);
+        setParsedLeads([]);
+        store.fetchLeads();
+      } else {
+        throw new Error(error.message);
+      }
+    } catch (err: any) {
+      addToast({
+        title: 'Error de importación',
+        description: err.message || 'No se pudieron importar los leads.',
+        type: 'error',
+      });
+    } finally {
+      setImportingLeads(false);
+    }
+  };
 
   const handleOpenEdit = (lead: Lead) => {
     setEditingLead(lead);
@@ -66,12 +154,9 @@ export default function ProspectosPage() {
   });
 
   const getAgentName = (id: string | null) => {
-    switch (id) {
-      case '00000000-0000-0000-0000-000000000003': return 'Carlos M.';
-      case '00000000-0000-0000-0000-000000000004': return 'Valeria S.';
-      case '00000000-0000-0000-0000-000000000001': return 'Diego R.';
-      default: return 'Sin asignar';
-    }
+    if (!id) return 'Sin asignar';
+    const found = agents.find((a) => a.id === id);
+    return found ? found.name : 'Cargando...';
   };
 
   const countriesShort = {
@@ -92,12 +177,24 @@ export default function ProspectosPage() {
             {filteredLeads.length} registros filtrados · {store.leads.filter(l => l.status === 'Nuevo').length} sin contactar
           </p>
         </div>
-        <button
-          onClick={() => { setEditingLead(null); setFormOpen(true); }}
-          className="flex items-center gap-2 bg-kovex-primary hover:brightness-105 active:scale-[0.98] text-xs font-bold px-4 py-2.5 rounded-xl text-white transition-all shadow-lg shadow-kovex-primary/10"
-        >
-          <Plus size={14} /> Nuevo Prospecto
-        </button>
+        <div className="flex gap-3">
+          {permissions.canImportLeads && (
+            <button
+              onClick={() => setImportModalOpen(true)}
+              className="flex items-center gap-2 bg-[#0c1222] border border-kovex-border hover:bg-[#141d33]/50 text-xs font-bold px-4 py-2.5 rounded-xl text-white transition-all"
+            >
+              <Upload size={14} className="text-kovex-primary" /> Importar CSV
+            </button>
+          )}
+          {permissions.canCreateLead && (
+            <button
+              onClick={() => { setEditingLead(null); setFormOpen(true); }}
+              className="flex items-center gap-2 bg-kovex-primary hover:brightness-105 active:scale-[0.98] text-xs font-bold px-4 py-2.5 rounded-xl text-[#060b16] transition-all shadow-lg shadow-kovex-primary/10"
+            >
+              <Plus size={14} /> Nuevo Prospecto
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Toolbar Filter */}
@@ -150,9 +247,9 @@ export default function ProspectosPage() {
             className="bg-kovex-bg border border-kovex-border text-white text-xs rounded-xl px-3 py-2 outline-none"
           >
             <option value="">Todos los agentes</option>
-            <option value="00000000-0000-0000-0000-000000000003">Carlos Méndez</option>
-            <option value="00000000-0000-0000-0000-000000000004">Valeria Soto</option>
-            <option value="00000000-0000-0000-0000-000000000001">Diego Ramírez</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
           </select>
 
           {/* Reset Filters button */}
@@ -312,9 +409,9 @@ export default function ProspectosPage() {
                 className="w-full bg-kovex-bg border border-kovex-border text-white text-xs rounded-xl p-3 outline-none"
               >
                 <option value="">Seleccionar agente</option>
-                <option value="00000000-0000-0000-0000-000000000003">Carlos Méndez</option>
-                <option value="00000000-0000-0000-0000-000000000004">Valeria Soto</option>
-                <option value="00000000-0000-0000-0000-000000000001">Diego Ramírez</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -353,6 +450,103 @@ export default function ProspectosPage() {
               className="px-4 py-2 border border-kovex-border text-xs rounded-xl text-white"
             >
               Cerrar
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* CSV IMPORT MODAL */}
+      <Modal
+        isOpen={importModalOpen}
+        onClose={() => { setImportModalOpen(false); setParsedLeads([]); }}
+        title="Importar Prospectos (CSV)"
+      >
+        <div className="space-y-4 text-kovex-text">
+          <div className="bg-[#141d33]/50 border border-kovex-border p-3.5 rounded-xl text-xs space-y-1.5 leading-normal">
+            <span className="font-bold text-white block">Formato requerido del archivo:</span>
+            <p className="text-kovex-muted">
+              El archivo debe ser un <span className="font-mono text-kovex-accent">.csv</span> delimitado por comas (,) o punto y coma (;). El orden de las columnas debe ser:
+            </p>
+            <div className="font-mono bg-[#060b16] p-2 rounded border border-kovex-border text-center text-kovex-accent font-bold mt-1 overflow-x-auto whitespace-nowrap">
+              Nombre, Correo, Teléfono, País, Fuente, Notas
+            </div>
+            <span className="text-[10px] text-kovex-muted block mt-1">
+              * Nota: Se ignorará la primera fila si contiene encabezados (ej. "Nombre", "Email").
+            </span>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-kovex-muted uppercase tracking-wider">Seleccionar archivo</label>
+            <div className="relative border-2 border-dashed border-kovex-border rounded-xl p-6 flex flex-col items-center justify-center gap-2 hover:border-kovex-primary/45 transition-colors cursor-pointer bg-[#060b16]/30">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleCSVUpload}
+                className="hidden"
+                id="csv-file-input"
+              />
+              <label htmlFor="csv-file-input" className="absolute inset-0 cursor-pointer" />
+              <FileSpreadsheet className="text-kovex-muted" size={28} />
+              <span className="text-xs text-white font-semibold">Cargar archivo CSV</span>
+            </div>
+          </div>
+
+          {parsedLeads.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-bold text-white">Vista Previa ({parsedLeads.length} leads detectados)</span>
+                <button
+                  onClick={() => setParsedLeads([])}
+                  className="text-kovex-danger hover:underline text-[10px]"
+                >
+                  Limpiar
+                </button>
+              </div>
+              <div className="border border-kovex-border rounded-xl max-h-48 overflow-y-auto bg-[#060b16]/50">
+                <table className="w-full text-left text-[11px]">
+                  <thead>
+                    <tr className="bg-[#141d33]/50 border-b border-kovex-border/60 text-kovex-muted">
+                      <th className="p-2">Nombre</th>
+                      <th className="p-2">Correo</th>
+                      <th className="p-2">País</th>
+                      <th className="p-2">Fuente</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parsedLeads.slice(0, 10).map((l, index) => (
+                      <tr key={index} className="border-b border-kovex-border/30">
+                        <td className="p-2 font-bold text-white truncate max-w-[100px]">{l.full_name}</td>
+                        <td className="p-2 text-kovex-muted truncate max-w-[100px]">{l.email}</td>
+                        <td className="p-2 text-kovex-muted">{l.country}</td>
+                        <td className="p-2 text-kovex-muted">{l.source}</td>
+                      </tr>
+                    ))}
+                    {parsedLeads.length > 10 && (
+                      <tr>
+                        <td colSpan={4} className="p-2 text-center text-kovex-muted italic text-[10px]">
+                          ... y {parsedLeads.length - 10} filas más.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div className="pt-4 border-t border-kovex-border flex justify-end gap-3">
+            <button
+              onClick={() => { setImportModalOpen(false); setParsedLeads([]); }}
+              className="px-4 py-2 border border-kovex-border text-xs rounded-xl text-white font-semibold"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleConfirmImport}
+              disabled={importingLeads || parsedLeads.length === 0}
+              className="px-4 py-2 bg-kovex-primary disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-105 active:scale-[0.98] text-[#060b16] text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
+            >
+              {importingLeads ? 'Importando...' : 'Confirmar Importación'}
             </button>
           </div>
         </div>

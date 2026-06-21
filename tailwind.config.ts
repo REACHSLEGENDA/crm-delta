@@ -9,12 +9,12 @@ export default {
     extend: {
       colors: {
         kovex: {
-          bg: "#080C18",
-          surface: "#0F1525",
-          elevated: "#1A2035",
+          bg: "#060b16",
+          surface: "#0c1222",
+          elevated: "#141d33",
           border: "#FFFFFF0F",
-          primary: "#E91E8C",
-          accent: "#00E5CC",
+          primary: "#c5a059",
+          accent: "#dfc080",
           success: "#22C55E",
           warning: "#F59E0B",
           danger: "#EF4444",
