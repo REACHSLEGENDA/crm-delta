@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { supabase } from '../lib/supabase';
 import type { UserRole, Department } from '../types';
 import { Shield, Mail, Lock, User, Briefcase, CheckCircle, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -21,33 +22,19 @@ export default function RegisterInternal() {
     setSuccess(false);
 
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-
-      const response = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': serviceRoleKey,
-          'Authorization': `Bearer ${serviceRoleKey}`
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          email_confirm: true,
-          user_metadata: {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
             full_name: fullName,
             role: role,
             department: department
           }
-        })
+        }
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error_description || data.msg || data.message || 'Error al crear el usuario.');
-      }
+      if (error) throw error;
 
       if (data) {
         setSuccess(true);
