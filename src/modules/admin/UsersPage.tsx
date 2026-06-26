@@ -783,11 +783,11 @@ export default function UsersPage() {
               className="px-4 py-2 bg-kovex-primary hover:brightness-105 active:scale-[0.98] text-xs font-bold rounded-xl text-[#060b16] transition-all shadow-lg flex items-center gap-2"
             >
               {submitting ? (
-                <>
+                <span className="flex items-center gap-2">
                   <Loader2 size={12} className="animate-spin text-[#060b16]" /> Guardando...
-                </>
+                </span>
               ) : (
-                'Añadir Usuario'
+                <span>Añadir Usuario</span>
               )}
             </button>
           </div>
