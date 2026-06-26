@@ -41,8 +41,8 @@ export const useDealsStore = create<DealsState>((set, get) => ({
 
   updateDealStage: async (id, stage) => {
     try {
-      const { data, error } = await supabase.from('deals').update({ stage }).eq('id', id);
-      if (!error && data) {
+      const { data, error } = await supabase.from('deals').update({ stage }).eq('id', id).select();
+      if (!error && data && data.length > 0) {
         set((state) => ({
           deals: state.deals.map((d) => d.id === id ? { ...d, ...data[0] } : d)
         }));
@@ -54,8 +54,8 @@ export const useDealsStore = create<DealsState>((set, get) => ({
 
   createDeal: async (deal) => {
     try {
-      const { data, error } = await supabase.from('deals').insert(deal);
-      if (!error && data) {
+      const { data, error } = await supabase.from('deals').insert(deal).select();
+      if (!error && data && data.length > 0) {
         set((state) => ({ deals: [data[0], ...state.deals] }));
       }
     } catch (err) {

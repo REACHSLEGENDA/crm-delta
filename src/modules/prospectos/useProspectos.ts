@@ -72,8 +72,8 @@ export const useProspectosStore = create<ProspectosState>((set, get) => ({
 
   createLead: async (lead) => {
     try {
-      const { data, error } = await supabase.from('leads').insert(lead);
-      if (!error && data) {
+      const { data, error } = await supabase.from('leads').insert(lead).select();
+      if (!error && data && data.length > 0) {
         set((state) => ({ leads: [data[0], ...state.leads] }));
       }
     } catch (err) {
@@ -83,8 +83,8 @@ export const useProspectosStore = create<ProspectosState>((set, get) => ({
 
   updateLead: async (id, updates) => {
     try {
-      const { data, error } = await supabase.from('leads').update(updates).eq('id', id);
-      if (!error && data) {
+      const { data, error } = await supabase.from('leads').update(updates).eq('id', id).select();
+      if (!error && data && data.length > 0) {
         set((state) => ({
           leads: state.leads.map((l) => l.id === id ? { ...l, ...data[0] } : l)
         }));
