@@ -240,9 +240,17 @@ export default function UsersPage() {
         })
       });
 
-      const json = await res.json();
+      let json: any = {};
+      try {
+        json = await res.json();
+      } catch (parseErr) {
+        const textErr = await res.text();
+        console.error('Failed to parse json response:', textErr);
+        json = { error: textErr || `HTTP Error ${res.status}` };
+      }
 
       if (!res.ok || json.error) {
+        console.error('Create user failed:', json);
         addToast({ title: 'Error al crear usuario', description: json.error || 'Error desconocido', type: 'error' });
         return;
       }
