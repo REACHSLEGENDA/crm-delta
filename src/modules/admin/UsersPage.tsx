@@ -780,15 +780,14 @@ export default function UsersPage() {
             <button
               onClick={handleInviteUser}
               disabled={submitting}
-              className="px-4 py-2 bg-kovex-primary hover:brightness-105 active:scale-[0.98] text-xs font-bold rounded-xl text-[#060b16] transition-all shadow-lg flex items-center gap-2"
+              className="px-4 py-2 bg-kovex-primary hover:brightness-105 active:scale-[0.98] text-xs font-bold rounded-xl text-[#060b16] transition-all shadow-lg flex items-center gap-2 notranslate"
             >
-              {submitting ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 size={12} className="animate-spin text-[#060b16]" /> Guardando...
-                </span>
-              ) : (
-                <span>Añadir Usuario</span>
-              )}
+              <span className={submitting ? "flex items-center gap-2" : "hidden"}>
+                <Loader2 size={12} className="animate-spin text-[#060b16]" /> Guardando...
+              </span>
+              <span className={!submitting ? "block" : "hidden"}>
+                Añadir Usuario
+              </span>
             </button>
           </div>
         </div>

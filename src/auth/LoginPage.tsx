@@ -303,15 +303,14 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-kovex-primary to-kovex-accent hover:brightness-105 active:scale-[0.99] text-[#060b16] font-bold py-3 px-4 rounded-xl transition-all shadow-[0_4px_16px_rgba(197,160,89,0.25)] flex items-center justify-center gap-2"
+              className="w-full bg-gradient-to-r from-kovex-primary to-kovex-accent hover:brightness-105 active:scale-[0.99] text-[#060b16] font-bold py-3 px-4 rounded-xl transition-all shadow-[0_4px_16px_rgba(197,160,89,0.25)] flex items-center justify-center gap-2 notranslate"
             >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 size={16} className="animate-spin text-[#060b16]" /> Verificando acceso...
-                </span>
-              ) : (
-                <span>Iniciar Sesión</span>
-              )}
+              <span className={loading ? "flex items-center gap-2" : "hidden"}>
+                <Loader2 size={16} className="animate-spin text-[#060b16]" /> Verificando acceso...
+              </span>
+              <span className={!loading ? "block" : "hidden"}>
+                Iniciar Sesión
+              </span>
             </button>
           </form>
 
