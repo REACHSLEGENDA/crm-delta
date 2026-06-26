@@ -21,7 +21,7 @@ export default function Modal({
   maxWidthClass = 'max-w-lg'
 }: ModalProps) {
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {isOpen && (
         <>
           {/* Backdrop */}
