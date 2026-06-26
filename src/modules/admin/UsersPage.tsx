@@ -214,65 +214,43 @@ export default function UsersPage() {
 
   const handleInviteUser = async () => {
     if (!inviteFullName.trim() || !inviteEmail.trim() || !invitePassword.trim()) {
-      addToast({
-        title: 'Campos incompletos',
-        description: 'Por favor, llena todos los campos.',
-        type: 'warning',
-      });
+      addToast({ title: 'Campos incompletos', description: 'Por favor, llena todos los campos.', type: 'warning' });
       return;
     }
-    
     setSubmitting(true);
     try {
-      // 1. Crear usuario en Supabase Auth
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: inviteEmail.trim(),
-        password: invitePassword,
-        options: {
-          data: {
-            full_name: inviteFullName.trim(),
-            role: inviteRole,
-            department: inviteDepartment
-          }
-        }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        addToast({ title: 'Sin sesion', description: 'Tu sesion expiro. Vuelve a iniciar sesion.', type: 'error' });
+        return;
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://kzemdiggdpxfceiecbat.supabase.co';
+      const res = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          password: invitePassword,
+          full_name: inviteFullName.trim(),
+          role: inviteRole,
+          department: inviteDepartment,
+        })
       });
 
-      if (signUpError) {
-        addToast({ title: 'Error al crear usuario', description: signUpError.message, type: 'error' });
+      const json = await res.json();
+
+      if (!res.ok || json.error) {
+        addToast({ title: 'Error al crear usuario', description: json.error || 'Error desconocido', type: 'error' });
         return;
-      }
-
-      const userId = signUpData?.user?.id;
-      if (!userId) {
-        addToast({ title: 'Error', description: 'No se obtuvo el ID del usuario creado.', type: 'error' });
-        return;
-      }
-
-      // 2. Insertar perfil manualmente (por si el trigger de BD no existe o no se ejecutó)
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        id: userId,
-        full_name: inviteFullName.trim(),
-        email: inviteEmail.trim(),
-        role: inviteRole,
-        department: inviteDepartment,
-        status: 'online',
-        avatar_url: null,
-      }, { onConflict: 'id' });
-
-      if (profileError) {
-        console.warn('Profile upsert error (may already exist):', profileError.message);
-      }
-
-      // 3. Enviar correo de reset de contraseña para que el usuario reciba notificación
-      if (isRealSupabase) {
-        await supabase.auth.resetPasswordForEmail(inviteEmail.trim(), {
-          redirectTo: `${window.location.origin}/reset-password`
-        });
       }
 
       addToast({
         title: 'Usuario creado',
-        description: `${inviteFullName} fue agregado como ${inviteRole}. Se le envió un correo para establecer su contraseña.`,
+        description: `${inviteFullName} fue agregado como ${inviteRole}.`,
         type: 'success',
       });
 
@@ -282,7 +260,6 @@ export default function UsersPage() {
       setInvitePassword('');
       setInviteRole('AGENTE');
       setInviteDepartment('ventas');
-
       setTimeout(() => fetchUsers(), 1500);
 
     } catch (err: any) {
