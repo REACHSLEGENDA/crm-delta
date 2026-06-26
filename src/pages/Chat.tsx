@@ -49,7 +49,7 @@ export default function Chat({ currentProfile }: ChatProps) {
           table: 'messages',
           filter: `channel_id=eq.${selectedChannel.id}`
         },
-        async (payload) => {
+        async (payload: any) => {
           // Fetch sender profile details to attach to the real-time message
           const { data: senderProfile } = await supabase
             .from('profiles')

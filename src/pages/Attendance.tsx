@@ -34,7 +34,7 @@ export default function AttendancePage({ currentProfile }: AttendanceProps) {
       // Check if there's an open session today
       const today = new Date().toISOString().split('T')[0];
       const openSession = data?.find(
-        log => log.clock_in.startsWith(today) && log.status === 'working'
+        (log: any) => log.clock_in.startsWith(today) && log.status === 'working'
       );
 
       if (openSession) {
@@ -42,7 +42,7 @@ export default function AttendancePage({ currentProfile }: AttendanceProps) {
         setActiveLogId(openSession.id);
         setActiveClockIn(openSession.clock_in);
       } else {
-        const completedSession = data?.find(log => log.clock_in.startsWith(today));
+        const completedSession = data?.find((log: any) => log.clock_in.startsWith(today));
         if (completedSession) {
           setCurrentStatus('completed');
         } else {

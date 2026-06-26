@@ -58,7 +58,7 @@ export default function Dashboard({ profile }: DashboardProps) {
         .from('deals')
         .select('amount')
         .eq('stage', 'won');
-      const salesSum = wonDeals?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
+      const salesSum = wonDeals?.reduce((acc: number, curr: any) => acc + Number(curr.amount), 0) || 0;
 
       // 4. Fetch online agents
       const { count: agentsCount } = await supabase
