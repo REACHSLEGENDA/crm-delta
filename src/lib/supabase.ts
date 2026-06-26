@@ -1,20 +1,19 @@
-// lib/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
-const isValidUrl = supabaseUrl && (supabaseUrl.startsWith('http://') || supabaseUrl.startsWith('https://'));
-const safeUrl = isValidUrl ? supabaseUrl : 'https://placeholder-project-ref.supabase.co';
-const safeKey = supabaseAnonKey || 'placeholder-anon-key';
-
-if (!isValidUrl || !supabaseAnonKey) {
-  console.error('ERROR: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY environment variables are missing or invalid. Please configure them in your hosting panel (e.g. Netlify/Vercel).');
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables');
 }
 
-// Export actual Supabase client
-export const supabase = createClient(safeUrl, safeKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export const getSupabaseMode = () => 'PROD';
-export const isRealSupabase = !!isValidUrl;
-
+// Admin client for registration bypass / metadata insertion
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey || supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
