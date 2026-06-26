@@ -224,74 +224,69 @@ export default function UsersPage() {
     
     setSubmitting(true);
     try {
-      let authErr: any = null;
-      
-      if (isRealSupabase) {
-        const { createClient } = await import('@supabase/supabase-js');
-        const tempClient = createClient(
-          import.meta.env.VITE_SUPABASE_URL || '',
-          import.meta.env.VITE_SUPABASE_ANON_KEY || '',
-          {
-            auth: {
-              persistSession: false,
-              autoRefreshToken: false,
-            }
+      // 1. Crear usuario en Supabase Auth
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: inviteEmail.trim(),
+        password: invitePassword,
+        options: {
+          data: {
+            full_name: inviteFullName.trim(),
+            role: inviteRole,
+            department: inviteDepartment
           }
-        );
-        const { error } = await tempClient.auth.signUp({
-          email: inviteEmail,
-          password: invitePassword,
-          options: {
-            data: {
-              full_name: inviteFullName,
-              role: inviteRole,
-              department: inviteDepartment
-            }
-          }
-        });
-        authErr = error;
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email: inviteEmail,
-          password: invitePassword,
-          options: {
-            data: {
-              full_name: inviteFullName,
-              role: inviteRole,
-              department: inviteDepartment
-            }
-          }
-        });
-        authErr = error;
-      }
-
-      if (authErr) {
-        addToast({
-          title: 'Error al añadir',
-          description: authErr.message,
-          type: 'error',
-        });
-      } else {
-        setTimeout(async () => {
-          await fetchUsers();
-        }, 1200);
-
-        addToast({
-          title: 'Usuario Añadido',
-          description: `Se registró a ${inviteFullName} (${inviteRole}) con éxito.`,
-          type: 'success',
-        });
-        setInviteOpen(false);
-        setInviteFullName('');
-        setInviteEmail('');
-        setInvitePassword('');
-      }
-    } catch (err: any) {
-      addToast({
-        title: 'Error inesperado',
-        description: err.message,
-        type: 'error',
+        }
       });
+
+      if (signUpError) {
+        addToast({ title: 'Error al crear usuario', description: signUpError.message, type: 'error' });
+        return;
+      }
+
+      const userId = signUpData?.user?.id;
+      if (!userId) {
+        addToast({ title: 'Error', description: 'No se obtuvo el ID del usuario creado.', type: 'error' });
+        return;
+      }
+
+      // 2. Insertar perfil manualmente (por si el trigger de BD no existe o no se ejecutó)
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: userId,
+        full_name: inviteFullName.trim(),
+        email: inviteEmail.trim(),
+        role: inviteRole,
+        department: inviteDepartment,
+        status: 'online',
+        avatar_url: null,
+      }, { onConflict: 'id' });
+
+      if (profileError) {
+        console.warn('Profile upsert error (may already exist):', profileError.message);
+      }
+
+      // 3. Enviar correo de reset de contraseña para que el usuario reciba notificación
+      if (isRealSupabase) {
+        await supabase.auth.resetPasswordForEmail(inviteEmail.trim(), {
+          redirectTo: `${window.location.origin}/reset-password`
+        });
+      }
+
+      addToast({
+        title: 'Usuario creado',
+        description: `${inviteFullName} fue agregado como ${inviteRole}. Se le envió un correo para establecer su contraseña.`,
+        type: 'success',
+      });
+
+      setInviteOpen(false);
+      setInviteFullName('');
+      setInviteEmail('');
+      setInvitePassword('');
+      setInviteRole('AGENTE');
+      setInviteDepartment('ventas');
+
+      setTimeout(() => fetchUsers(), 1500);
+
+    } catch (err: any) {
+      addToast({ title: 'Error inesperado', description: err.message, type: 'error' });
     } finally {
       setSubmitting(false);
     }
