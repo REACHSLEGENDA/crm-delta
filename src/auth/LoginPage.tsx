@@ -306,11 +306,11 @@ export default function LoginPage() {
               className="w-full bg-gradient-to-r from-kovex-primary to-kovex-accent hover:brightness-105 active:scale-[0.99] text-[#060b16] font-bold py-3 px-4 rounded-xl transition-all shadow-[0_4px_16px_rgba(197,160,89,0.25)] flex items-center justify-center gap-2"
             >
               {loading ? (
-                <>
+                <span className="flex items-center gap-2">
                   <Loader2 size={16} className="animate-spin text-[#060b16]" /> Verificando acceso...
-                </>
+                </span>
               ) : (
-                'Iniciar Sesión'
+                <span>Iniciar Sesión</span>
               )}
             </button>
           </form>
