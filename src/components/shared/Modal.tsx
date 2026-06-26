@@ -23,18 +23,18 @@ export default function Modal({
   return (
     <AnimatePresence mode="wait">
       {isOpen && (
-        <>
+        <div key="modal-root" className="fixed inset-0 z-[80]">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.5 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 z-[80] backdrop-blur-[2px] pointer-events-auto"
+            className="absolute inset-0 bg-black/60 backdrop-blur-[2px] pointer-events-auto"
           />
 
           {/* Modal Container */}
-          <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 pointer-events-none">
+          <div className="absolute inset-0 z-10 flex items-center justify-center p-4 pointer-events-none">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -66,7 +66,7 @@ export default function Modal({
               )}
             </motion.div>
           </div>
-        </>
+        </div>
       )}
     </AnimatePresence>
   );
