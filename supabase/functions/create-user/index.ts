@@ -13,38 +13,23 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
 
     const authHeader = req.headers.get('Authorization') || ''
-    const token = authHeader.replace('Bearer ', '').trim()
+    
+    const callerClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } }
+    })
 
-    if (!token) {
-      return new Response(JSON.stringify({ error: 'Sin token de autorizacion' }), {
+    const { data: { user: callerUser }, error: userError } = await callerClient.auth.getUser()
+
+    if (userError || !callerUser) {
+      return new Response(JSON.stringify({ error: 'No autorizado: ' + (userError?.message || 'Token invalido') }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    let userId: string | null = null
-    try {
-      const parts = token.split('.')
-      if (parts.length === 3) {
-        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
-        while (base64.length % 4) {
-          base64 += '='
-        }
-        const payload = JSON.parse(atob(base64))
-        userId = payload.sub || null
-      }
-    } catch (e: any) {
-      return new Response(JSON.stringify({ error: 'Token invalido: ' + e.message }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
-
-    if (!userId) {
-      return new Response(JSON.stringify({ error: 'Token sin usuario' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
+    const userId = callerUser.id
 
     // Use service role to verify caller's role
     const adminClient = createClient(supabaseUrl, serviceRoleKey)
