@@ -225,8 +225,7 @@ export default function UsersPage() {
         return;
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://kzemdiggdpxfceiecbat.supabase.co';
-      const res = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+      const res = await fetch('https://kzemdiggdpxfceiecbat.supabase.co/functions/v1/create-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
