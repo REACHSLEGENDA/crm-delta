@@ -34,10 +34,47 @@ export interface Lead {
   phone?: string;
   status: LeadStatus;
   source?: string;
+  country?: string | null;
+  investment_capacity?: string | null;
+  comments?: string | null;
+  campaign_name?: string | null;
+  campaign_asset?: string | null;
+  interest_intent?: string | null;
+  registered_at?: string | null;
+  import_batch_id?: string | null;
+  raw_data?: Record<string, unknown>;
   agent_id?: string | null;
   team_id?: string | null;
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ImportBatch {
+  id: string;
+  created_at: string;
+  created_by: string | null;
+  team_id: string | null;
+  file_name: string;
+  file_type: string;
+  total_rows: number;
+  imported_rows: number;
+  skipped_rows: number;
+  error_rows: number;
+  duplicate_rows: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  options: Record<string, unknown>;
+  profiles?: { first_name?: string; last_name?: string; email: string };
+}
+
+export interface ImportError {
+  id: string;
+  batch_id: string;
+  row_number: number;
+  error_type: string;
+  message: string;
+  raw_data: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface Deal {

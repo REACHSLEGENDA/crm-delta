@@ -173,15 +173,15 @@ export const AdminPanel = () => {
 
             <div>
               <label className="block text-xs text-[#94A3B8] mb-1">Rol Asignado</label>
-              <select 
+              <select
                 value={editRole}
                 onChange={(e) => setEditRole(e.target.value)}
                 className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none text-[#94A3B8]"
               >
-                <option value="SUPERADMIN">SUPERADMIN</option>
-                <option value="MANAGER">MANAGER</option>
-                <option value="AGENT">AGENT</option>
-                <option value="SUPERVISOR">SUPERVISOR</option>
+                <option value="SUPERADMIN">ADMIN — Acceso Total</option>
+                <option value="MANAGER">GERENTE — Gestión y Monitoreo</option>
+                <option value="SUPERVISOR">SUPERVISOR — Seguimiento de Equipo</option>
+                <option value="AGENT">EJECUTIVO — Seguimiento Propio</option>
               </select>
             </div>
 

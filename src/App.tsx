@@ -12,6 +12,7 @@ import { ContactCenter } from "@/modules/contact-center/ContactCenter";
 import { ChatInterno } from "@/modules/chat/ChatInterno";
 import { AdminPanel } from "@/modules/admin/AdminPanel";
 import { RegisterInternal } from "@/modules/admin/RegisterInternal";
+import { ImportExportPage } from "@/modules/import-export/ImportExportPage";
 
 const App = () => {
   return (
@@ -83,10 +84,22 @@ const App = () => {
             }
           />
           <Route
+            path="/import-export"
+            element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["SUPERADMIN", "MANAGER"]}>
+                  <DashboardLayout>
+                    <ImportExportPage />
+                  </DashboardLayout>
+                </RoleGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/register-kovex-internal"
             element={
               <ProtectedRoute>
-                <RoleGuard allowedRoles={["SUPERADMIN"]}>
+                <RoleGuard allowedRoles={["SUPERADMIN", "MANAGER"]}>
                   <DashboardLayout>
                     <RegisterInternal />
                   </DashboardLayout>

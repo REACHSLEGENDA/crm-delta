@@ -3,9 +3,9 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { Lead, Profile, Note, Activity } from "@/types";
-import { 
-  Search, Plus, Tag, Trash2, 
-  Edit3, X, Phone, Mail, CheckCircle2 
+import {
+  Search, Plus, Tag, Trash2,
+  Edit3, X, Phone, Mail, CheckCircle2, Globe, TrendingUp, MessageSquare
 } from "lucide-react";
 
 export const ProspectosList = () => {
@@ -31,6 +31,9 @@ export const ProspectosList = () => {
     last_name: "",
     email: "",
     phone: "",
+    country: "",
+    investment_capacity: "",
+    comments: "",
     status: "Nuevo",
     source: "Web",
     agent_id: "",
@@ -234,6 +237,9 @@ export const ProspectosList = () => {
               last_name: "",
               email: "",
               phone: "",
+              country: "",
+              investment_capacity: "",
+              comments: "",
               status: "Nuevo",
               source: "Web",
               agent_id: profile?.id || "",
@@ -374,6 +380,9 @@ export const ProspectosList = () => {
                           last_name: lead.last_name,
                           email: lead.email,
                           phone: lead.phone,
+                          country: lead.country || "",
+                          investment_capacity: lead.investment_capacity || "",
+                          comments: lead.comments || "",
                           status: lead.status,
                           source: lead.source,
                           agent_id: lead.agent_id || "",
@@ -434,6 +443,14 @@ export const ProspectosList = () => {
                   <span>{selectedLead.phone || "Sin teléfono"}</span>
                 </div>
                 <div className="flex items-center gap-3 text-[#94A3B8]">
+                  <Globe className="h-4 w-4 text-[#D4AF37]" />
+                  <span>{selectedLead.country || "País no especificado"}</span>
+                </div>
+                <div className="flex items-center gap-3 text-[#94A3B8]">
+                  <TrendingUp className="h-4 w-4 text-[#D4AF37]" />
+                  <span>{selectedLead.investment_capacity || "Capacidad no indicada"}</span>
+                </div>
+                <div className="flex items-center gap-3 text-[#94A3B8]">
                   <Tag className="h-4 w-4 text-[#D4AF37]" />
                   <span>Fuente: {selectedLead.source}</span>
                 </div>
@@ -441,6 +458,12 @@ export const ProspectosList = () => {
                   <CheckCircle2 className="h-4 w-4 text-[#D4AF37]" />
                   <span>Estado: {selectedLead.status}</span>
                 </div>
+                {selectedLead.comments && (
+                  <div className="flex items-start gap-3 text-[#94A3B8] mt-1">
+                    <MessageSquare className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
+                    <span className="text-xs leading-relaxed">{selectedLead.comments}</span>
+                  </div>
+                )}
               </div>
 
               {/* Notes Feed */}
@@ -499,61 +522,97 @@ export const ProspectosList = () => {
       {/* Create / Edit Form Modal */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <form onSubmit={handleSaveLeadSubmit} className="w-full max-w-md bg-[#0D1428] border border-[rgba(212,175,55,0.2)] rounded-lg p-6 space-y-4">
-            <h3 className="text-lg font-title font-bold text-[#D4AF37]">
+          <form
+            onSubmit={handleSaveLeadSubmit}
+            className="w-full max-w-lg bg-[#0D1428] border border-[rgba(212,175,55,0.2)] rounded-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+          >
+            <h3 className="text-lg font-title font-bold text-[#D4AF37] sticky top-0 bg-[#0D1428] pb-2 border-b border-[rgba(212,175,55,0.12)]">
               {selectedLead?.id ? "Editar Prospecto" : "Nuevo Prospecto"}
             </h3>
-            
+
+            {/* Name */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-[#94A3B8] mb-1">Nombre</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   value={formData.first_name}
-                  onChange={(e) => setFormData({...formData, first_name: e.target.value})}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none"
+                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37]"
                 />
               </div>
               <div>
                 <label className="block text-xs text-[#94A3B8] mb-1">Apellido</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   value={formData.last_name}
-                  onChange={(e) => setFormData({...formData, last_name: e.target.value})}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none"
+                  onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37]"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs text-[#94A3B8] mb-1">Email</label>
-              <input 
-                type="email" 
-                value={formData.email || ""}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
-                className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none"
-              />
+            {/* Email + Phone */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-[#94A3B8] mb-1">Email</label>
+                <input
+                  type="email"
+                  value={formData.email || ""}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[#94A3B8] mb-1">Teléfono</label>
+                <input
+                  type="text"
+                  value={formData.phone || ""}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37]"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs text-[#94A3B8] mb-1">Teléfono</label>
-              <input 
-                type="text" 
-                value={formData.phone || ""}
-                onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none"
-              />
+            {/* Country + Investment Capacity */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-[#94A3B8] mb-1">País</label>
+                <input
+                  type="text"
+                  placeholder="Ej. México"
+                  value={formData.country || ""}
+                  onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[#94A3B8] mb-1">Capacidad de Inversión</label>
+                <select
+                  value={formData.investment_capacity || ""}
+                  onChange={(e) => setFormData({ ...formData, investment_capacity: e.target.value })}
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
+                >
+                  <option value="">Seleccionar rango...</option>
+                  <option value="Menos de $5,000">Menos de $5,000</option>
+                  <option value="$5,000 - $25,000">$5,000 – $25,000</option>
+                  <option value="$25,000 - $100,000">$25,000 – $100,000</option>
+                  <option value="$100,000 - $500,000">$100,000 – $500,000</option>
+                  <option value="Más de $500,000">Más de $500,000</option>
+                </select>
+              </div>
             </div>
 
+            {/* Status + Source */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-[#94A3B8] mb-1">Estado</label>
-                <select 
+                <select
                   value={formData.status}
-                  onChange={(e) => setFormData({...formData, status: e.target.value as any})}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none text-[#94A3B8]"
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
                 >
                   <option value="Nuevo">Nuevo</option>
                   <option value="Contactado">Contactado</option>
@@ -566,10 +625,10 @@ export const ProspectosList = () => {
               </div>
               <div>
                 <label className="block text-xs text-[#94A3B8] mb-1">Fuente</label>
-                <select 
+                <select
                   value={formData.source}
-                  onChange={(e) => setFormData({...formData, source: e.target.value})}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none text-[#94A3B8]"
+                  onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
                 >
                   <option value="Web">Web</option>
                   <option value="Recomendado">Recomendado</option>
@@ -579,32 +638,47 @@ export const ProspectosList = () => {
               </div>
             </div>
 
+            {/* Assigned agent */}
             {(isSuperAdmin || isManager) && (
               <div>
                 <label className="block text-xs text-[#94A3B8] mb-1">Agente Asignado</label>
-                <select 
+                <select
                   value={formData.agent_id || ""}
-                  onChange={(e) => setFormData({...formData, agent_id: e.target.value})}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none text-[#94A3B8]"
+                  onChange={(e) => setFormData({ ...formData, agent_id: e.target.value })}
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
                 >
                   <option value="">Asignar agente...</option>
-                  {agents.map(a => (
-                    <option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.first_name} {a.last_name}
+                    </option>
                   ))}
                 </select>
               </div>
             )}
 
+            {/* Comments */}
+            <div>
+              <label className="block text-xs text-[#94A3B8] mb-1">Comentarios</label>
+              <textarea
+                rows={3}
+                placeholder="Observaciones iniciales, contexto del prospecto..."
+                value={formData.comments || ""}
+                onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
+                className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] resize-none"
+              />
+            </div>
+
             <div className="flex justify-end gap-3 pt-2">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setIsFormOpen(false)}
                 className="gold-button-secondary px-4 py-2 text-xs font-semibold rounded"
               >
                 Cancelar
               </button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="gold-button-primary px-4 py-2 text-xs font-semibold rounded"
               >
                 Guardar

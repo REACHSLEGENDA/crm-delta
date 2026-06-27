@@ -24,6 +24,34 @@ import {
   Zap,
 } from "lucide-react";
 
+const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+const PIPELINE_STAGES = [
+  "Nuevo lead",
+  "Contactado",
+  "Interesado",
+  "Asesoría",
+  "Depósito pendiente",
+];
+
+const STAGE_SHORT: Record<string, string> = {
+  "Nuevo lead": "Nuevo",
+  "Contactado": "Contactado",
+  "Interesado": "Interesado",
+  "Asesoría": "Asesoría",
+  "Depósito pendiente": "Depósito",
+};
+
+interface RevenuePoint {
+  name: string;
+  revenue: number;
+}
+
+interface PipelinePoint {
+  stage: string;
+  count: number;
+}
+
 export const Dashboard = () => {
   const { profile } = useAuth();
   const { isAgent } = usePermissions();
@@ -33,6 +61,8 @@ export const Dashboard = () => {
     conversionRate: 0,
     projectedRevenue: 0,
   });
+  const [revenueData, setRevenueData] = useState<RevenuePoint[]>([]);
+  const [pipelineData, setPipelineData] = useState<PipelinePoint[]>([]);
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -40,9 +70,11 @@ export const Dashboard = () => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
+
+        // Build scoped queries depending on role
         let leadsQuery = supabase.from("leads").select("id, status", { count: "exact" });
-        let dealsQuery = supabase.from("deals").select("id, value, stage");
-        let activitiesQuery = supabase
+        let dealsQuery = supabase.from("deals").select("id, value, stage, created_at");
+        const activitiesQuery = supabase
           .from("activities")
           .select("*")
           .order("created_at", { ascending: false })
@@ -62,8 +94,10 @@ export const Dashboard = () => {
           activitiesQuery,
         ]);
 
-        const leadsCount = leadsRes.count || 0;
-        const dealsData = dealsRes.data || [];
+        const leadsCount = leadsRes.count ?? 0;
+        const dealsData = dealsRes.data ?? [];
+
+        // KPI stats
         const activeDeals = dealsData.filter(
           (d) => !["Ganado", "Perdido"].includes(d.stage)
         ).length;
@@ -74,10 +108,39 @@ export const Dashboard = () => {
             ? Math.round((wonDeals.length / totalDealsCount) * 100)
             : 0;
         const projectedRevenue = dealsData
-          .filter((d) => !["Perdido"].includes(d.stage))
+          .filter((d) => d.stage !== "Perdido")
           .reduce((sum, d) => sum + Number(d.value || 0), 0);
 
         setStats({ totalLeads: leadsCount, activeDeals, conversionRate, projectedRevenue });
+
+        // Pipeline distribution — real counts per stage
+        setPipelineData(
+          PIPELINE_STAGES.map((stage) => ({
+            stage: STAGE_SHORT[stage] ?? stage,
+            count: dealsData.filter((d) => d.stage === stage).length,
+          }))
+        );
+
+        // Revenue per month (last 6 months) — real deal values grouped by creation month
+        const now = new Date();
+        const buckets: Array<{ key: string; name: string; revenue: number }> = [];
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          buckets.push({
+            key: `${d.getFullYear()}-${d.getMonth()}`,
+            name: MONTH_LABELS[d.getMonth()],
+            revenue: 0,
+          });
+        }
+        dealsData.forEach((deal) => {
+          if (!deal.created_at) return;
+          const d = new Date(deal.created_at);
+          const key = `${d.getFullYear()}-${d.getMonth()}`;
+          const bucket = buckets.find((b) => b.key === key);
+          if (bucket) bucket.revenue += Number(deal.value || 0);
+        });
+        setRevenueData(buckets.map(({ name, revenue }) => ({ name, revenue })));
+
         if (activitiesRes.data) setRecentActivities(activitiesRes.data);
       } catch (err) {
         console.error("Error loading dashboard data:", err);
@@ -88,23 +151,6 @@ export const Dashboard = () => {
 
     if (profile) fetchDashboardData();
   }, [profile, isAgent]);
-
-  const revenueData = [
-    { name: "Ene", revenue: 45000 },
-    { name: "Feb", revenue: 52000 },
-    { name: "Mar", revenue: 49000 },
-    { name: "Abr", revenue: 63000 },
-    { name: "May", revenue: 58000 },
-    { name: "Jun", revenue: stats.projectedRevenue > 0 ? stats.projectedRevenue : 75000 },
-  ];
-
-  const pipelineData = [
-    { stage: "Nuevo", count: Math.round(stats.totalLeads * 0.4) || 5 },
-    { stage: "Contactado", count: Math.round(stats.totalLeads * 0.3) || 4 },
-    { stage: "Interesado", count: Math.round(stats.activeDeals * 0.5) || 3 },
-    { stage: "Asesoría", count: Math.round(stats.activeDeals * 0.3) || 2 },
-    { stage: "Depósito", count: Math.round(stats.activeDeals * 0.2) || 1 },
-  ];
 
   if (loading) {
     return (
@@ -154,10 +200,14 @@ export const Dashboard = () => {
             <h3 className="text-3xl font-mono-numbers font-bold text-[#F8FAFC] leading-none">
               {stats.totalLeads}
             </h3>
-            <span className="inline-flex items-center gap-1 text-[10px] text-[#22C55E] font-semibold">
-              <TrendingUp className="h-3 w-3" />
-              +12% este mes
-            </span>
+            {stats.totalLeads > 0 ? (
+              <span className="inline-flex items-center gap-1 text-[10px] text-[#22C55E] font-semibold">
+                <TrendingUp className="h-3 w-3" />
+                En seguimiento
+              </span>
+            ) : (
+              <span className="text-[10px] text-[#4A6080] font-medium">Sin prospectos aún</span>
+            )}
           </div>
           <div className="icon-wrap-electric flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
             <Users className="h-5 w-5 text-[#00C9FF]" />
@@ -174,7 +224,7 @@ export const Dashboard = () => {
               {stats.activeDeals}
             </h3>
             <span className="text-[10px] text-[#D4AF37] font-semibold">
-              En mesa de asesoría
+              {stats.activeDeals > 0 ? "En mesa de asesoría" : "Sin negocios abiertos"}
             </span>
           </div>
           <div className="icon-wrap-gold flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
@@ -192,10 +242,14 @@ export const Dashboard = () => {
               {stats.conversionRate}
               <span className="text-lg text-[#4A6080]">%</span>
             </h3>
-            <span className="inline-flex items-center gap-1 text-[10px] text-[#22C55E] font-semibold">
-              <ArrowUpRight className="h-3 w-3" />
-              Promedio alto
-            </span>
+            {stats.conversionRate > 0 ? (
+              <span className="inline-flex items-center gap-1 text-[10px] text-[#22C55E] font-semibold">
+                <ArrowUpRight className="h-3 w-3" />
+                Negocios cerrados
+              </span>
+            ) : (
+              <span className="text-[10px] text-[#4A6080] font-medium">Sin cierres aún</span>
+            )}
           </div>
           <div className="icon-wrap-green flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
             <ArrowUpRight className="h-5 w-5 text-[#22C55E]" />
@@ -221,13 +275,13 @@ export const Dashboard = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Revenue area chart */}
+        {/* Revenue area chart — real deals by month */}
         <div className="glass-card p-5 lg:col-span-2 space-y-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <Zap className="h-4 w-4 text-[#D4AF37]" />
               <h3 className="text-sm font-title font-semibold text-[#E2E8F0]">
-                Rendimiento & Proyecciones
+                Capital Captado por Mes
               </h3>
             </div>
             <span className="text-[10px] text-[#4A6080] bg-[rgba(212,175,55,0.06)] border border-[rgba(212,175,55,0.12)] px-2 py-0.5 rounded-md font-medium">
@@ -235,60 +289,66 @@ export const Dashboard = () => {
             </span>
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorElectric" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#00C9FF" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#00C9FF" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis
-                  dataKey="name"
-                  stroke="#334155"
-                  tick={{ fill: "#4A6080", fontSize: 11, fontFamily: "Plus Jakarta Sans" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  stroke="#334155"
-                  tick={{ fill: "#4A6080", fontSize: 11, fontFamily: "JetBrains Mono" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "rgba(8,15,32,0.95)",
-                    border: "1px solid rgba(212,175,55,0.2)",
-                    borderRadius: "0.625rem",
-                    color: "#F8FAFC",
-                    backdropFilter: "blur(16px)",
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-                  }}
-                  labelStyle={{ color: "#D4AF37", fontFamily: "Outfit", fontWeight: 600 }}
-                  itemStyle={{ color: "#94A3B8", fontFamily: "JetBrains Mono", fontSize: 12 }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#D4AF37"
-                  fillOpacity={1}
-                  fill="url(#colorRevenue)"
-                  strokeWidth={1.5}
-                  dot={false}
-                  activeDot={{ r: 4, fill: "#D4AF37", stroke: "#050814", strokeWidth: 2 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {revenueData.every((d) => d.revenue === 0) ? (
+              <div className="h-full flex flex-col items-center justify-center gap-2">
+                <TrendingUp className="h-8 w-8 text-[#1E2D4A]" />
+                <p className="text-xs text-[#334155]">Sin negocios registrados en este período</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={revenueData}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <XAxis
+                    dataKey="name"
+                    stroke="#334155"
+                    tick={{ fill: "#4A6080", fontSize: 11, fontFamily: "Plus Jakarta Sans" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    stroke="#334155"
+                    tick={{ fill: "#4A6080", fontSize: 11, fontFamily: "JetBrains Mono" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "rgba(8,15,32,0.95)",
+                      border: "1px solid rgba(212,175,55,0.2)",
+                      borderRadius: "0.625rem",
+                      color: "#F8FAFC",
+                      backdropFilter: "blur(16px)",
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                    }}
+                    labelStyle={{ color: "#D4AF37", fontFamily: "Outfit", fontWeight: 600 }}
+                    itemStyle={{ color: "#94A3B8", fontFamily: "JetBrains Mono", fontSize: 12 }}
+                    formatter={(val: number) =>
+                      [`$${val.toLocaleString("es-MX")}`, "Capital"]
+                    }
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#D4AF37"
+                    fillOpacity={1}
+                    fill="url(#colorRevenue)"
+                    strokeWidth={1.5}
+                    dot={false}
+                    activeDot={{ r: 4, fill: "#D4AF37", stroke: "#050814", strokeWidth: 2 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
-        {/* Pipeline bar chart */}
+        {/* Pipeline bar chart — real stage counts */}
         <div className="glass-card p-5 space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-sm font-title font-semibold text-[#E2E8F0]">
@@ -299,35 +359,44 @@ export const Dashboard = () => {
             </span>
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={pipelineData} barSize={18}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                <XAxis
-                  dataKey="stage"
-                  stroke="#334155"
-                  tick={{ fill: "#4A6080", fontSize: 9, fontFamily: "Plus Jakarta Sans" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  stroke="#334155"
-                  tick={{ fill: "#4A6080", fontSize: 10, fontFamily: "JetBrains Mono" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "rgba(8,15,32,0.95)",
-                    border: "1px solid rgba(212,175,55,0.2)",
-                    borderRadius: "0.625rem",
-                    color: "#F8FAFC",
-                    backdropFilter: "blur(16px)",
-                  }}
-                  cursor={{ fill: "rgba(212,175,55,0.04)" }}
-                />
-                <Bar dataKey="count" fill="#00C9FF" radius={[4, 4, 0, 0]} fillOpacity={0.85} />
-              </BarChart>
-            </ResponsiveContainer>
+            {pipelineData.every((d) => d.count === 0) ? (
+              <div className="h-full flex flex-col items-center justify-center gap-2">
+                <Award className="h-8 w-8 text-[#1E2D4A]" />
+                <p className="text-xs text-[#334155]">Sin negocios en el embudo</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={pipelineData} barSize={18}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                  <XAxis
+                    dataKey="stage"
+                    stroke="#334155"
+                    tick={{ fill: "#4A6080", fontSize: 9, fontFamily: "Plus Jakarta Sans" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    stroke="#334155"
+                    tick={{ fill: "#4A6080", fontSize: 10, fontFamily: "JetBrains Mono" }}
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "rgba(8,15,32,0.95)",
+                      border: "1px solid rgba(212,175,55,0.2)",
+                      borderRadius: "0.625rem",
+                      color: "#F8FAFC",
+                      backdropFilter: "blur(16px)",
+                    }}
+                    cursor={{ fill: "rgba(212,175,55,0.04)" }}
+                    formatter={(val: number) => [val, "Negocios"]}
+                  />
+                  <Bar dataKey="count" fill="#00C9FF" radius={[4, 4, 0, 0]} fillOpacity={0.85} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>

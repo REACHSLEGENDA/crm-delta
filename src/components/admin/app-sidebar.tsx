@@ -22,6 +22,7 @@ import {
   MessageSquare,
   ShieldAlert,
   LogOut,
+  ArrowUpDown,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -84,7 +85,7 @@ const NavItem = ({ item, onClick }: NavItemProps) => {
 
 export function AppSidebar() {
   const { profile, logout } = useAuth();
-  const { isSuperAdmin } = usePermissions();
+  const { isSuperAdmin, isManager } = usePermissions();
   const { openMobile, setOpenMobile } = useSidebar();
 
   const handleClick = () => {
@@ -94,13 +95,14 @@ export function AppSidebar() {
   };
 
   const menuItems: MenuItem[] = [
-    { label: "Dashboard", path: "/", icon: LayoutDashboard, visible: true },
-    { label: "Prospectos", path: "/prospectos", icon: UserPlus, visible: true },
-    { label: "Negociaciones", path: "/negociaciones", icon: Kanban, visible: true },
-    { label: "Contactos", path: "/contactos", icon: Users, visible: true },
-    { label: "Contact Center", path: "/contact-center", icon: PhoneCall, visible: true },
-    { label: "Chat Interno", path: "/chat", icon: MessageSquare, visible: true },
-    { label: "Admin", path: "/admin", icon: ShieldAlert, visible: isSuperAdmin },
+    { label: "Dashboard",       path: "/",              icon: LayoutDashboard, visible: true },
+    { label: "Prospectos",      path: "/prospectos",    icon: UserPlus,        visible: true },
+    { label: "Negociaciones",   path: "/negociaciones", icon: Kanban,          visible: true },
+    { label: "Contactos",       path: "/contactos",     icon: Users,           visible: true },
+    { label: "Contact Center",  path: "/contact-center",icon: PhoneCall,       visible: true },
+    { label: "Chat Interno",    path: "/chat",          icon: MessageSquare,   visible: true },
+    { label: "Importar / Exportar", path: "/import-export", icon: ArrowUpDown, visible: isSuperAdmin || isManager },
+    { label: "Admin",           path: "/admin",         icon: ShieldAlert,     visible: isSuperAdmin },
   ];
 
   const initials =

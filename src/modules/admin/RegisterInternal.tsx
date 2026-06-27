@@ -140,10 +140,9 @@ export const RegisterInternal = () => {
               onChange={(e) => setRole(e.target.value)}
               className="w-full px-3 py-2 text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
             >
-              <option value="AGENT">AGENTE</option>
-              <option value="SUPERVISOR">SUPERVISOR</option>
-              <option value="MANAGER">MANAGER</option>
-              <option value="SUPERADMIN">SUPERADMIN</option>
+              <option value="AGENT">EJECUTIVO — Seguimiento Propio</option>
+              <option value="SUPERVISOR">SUPERVISOR — Seguimiento de Equipo</option>
+              <option value="MANAGER">GERENTE — Gestión y Monitoreo</option>
             </select>
           </div>
 
