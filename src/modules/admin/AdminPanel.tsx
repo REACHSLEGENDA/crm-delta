@@ -12,6 +12,8 @@ export const AdminPanel = () => {
 
   // Edit role dialog state
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+  const [editFirstName, setEditFirstName] = useState<string>("");
+  const [editLastName, setEditLastName] = useState<string>("");
   const [editRole, setEditRole] = useState<string>("AGENT");
   const [editActive, setEditActive] = useState<boolean>(true);
 
@@ -44,6 +46,8 @@ export const AdminPanel = () => {
       const { error } = await supabase
         .from("profiles")
         .update({
+          first_name: editFirstName,
+          last_name: editLastName,
           role: editRole as any,
           active: editActive,
         })
@@ -131,6 +135,8 @@ export const AdminPanel = () => {
                     <button 
                       onClick={() => {
                         setEditingProfile(prof);
+                        setEditFirstName(prof.first_name || "");
+                        setEditLastName(prof.last_name || "");
                         setEditRole(prof.role);
                         setEditActive(prof.active);
                       }}
@@ -164,11 +170,28 @@ export const AdminPanel = () => {
               <Shield className="h-5 w-5 text-[#D4AF37]" /> Modificar Acceso Corporativo
             </h3>
 
-            <div>
-              <label className="block text-xs text-[#94A3B8] mb-1">Nombre Completo</label>
-              <p className="text-sm font-semibold text-white bg-[#050814] px-3 py-2 rounded">
-                {editingProfile.first_name} {editingProfile.last_name}
-              </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-[#94A3B8] mb-1">Nombre</label>
+                <input
+                  type="text"
+                  value={editFirstName}
+                  onChange={(e) => setEditFirstName(e.target.value)}
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-white"
+                  placeholder="Nombre"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-[#94A3B8] mb-1">Apellidos</label>
+                <input
+                  type="text"
+                  value={editLastName}
+                  onChange={(e) => setEditLastName(e.target.value)}
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-white"
+                  placeholder="Apellidos"
+                />
+              </div>
             </div>
 
             <div>
