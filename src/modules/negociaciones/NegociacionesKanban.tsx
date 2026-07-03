@@ -375,6 +375,8 @@ export const NegociacionesKanban = () => {
               <button type="submit" className="gold-button-primary px-5 py-2 text-xs font-bold rounded-lg">Crear Deal</button>
             </div>
           </form>
+        </div>
+      )}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title="Eliminar Negociación"
