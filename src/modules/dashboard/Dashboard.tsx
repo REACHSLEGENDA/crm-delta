@@ -30,6 +30,7 @@ export const Dashboard = () => {
     projectedRevenue: 0,
     totalCommissions: 0,   // ← NUEVO: comisiones acumuladas ganadas
     lostDeposits: 0,        // ← NUEVO: depósitos perdidos
+    commissionPercentage: 0,
   });
   const [revenueData, setRevenueData] = useState<RevenuePoint[]>([]);
   const [pipelineData, setPipelineData] = useState<PipelinePoint[]>([]);
@@ -68,12 +69,21 @@ export const Dashboard = () => {
       const conversionRate = totalDealsCount > 0 ? Math.round((wonDeals.length / totalDealsCount) * 100) : 0;
       const projectedRevenue = dealsData.filter((d) => d.stage !== "Perdido").reduce((sum, d) => sum + Number(d.value || 0), 0);
 
-      // NUEVO: sumar capital de deals ganados (comisiones)
-      const totalCommissions = wonDeals.reduce((sum, d) => sum + Number(d.value || 0), 0);
+      // NUEVO: calcular porcentaje de comisión según volumen de deals ganados
+      const wonDealsCount = wonDeals.length;
+      let commissionPercentage = 0;
+      if (wonDealsCount >= 1 && wonDealsCount <= 3) commissionPercentage = 0.10;
+      else if (wonDealsCount >= 4 && wonDealsCount <= 6) commissionPercentage = 0.15;
+      else if (wonDealsCount >= 7) commissionPercentage = 0.20;
+
+      // NUEVO: sumar capital de deals ganados y aplicar % de comisión
+      const totalWonValue = wonDeals.reduce((sum, d) => sum + Number(d.value || 0), 0);
+      const totalCommissions = totalWonValue * commissionPercentage;
+      
       // NUEVO: contar depósitos perdidos
       const lostDeposits = lostDeals.length;
 
-      setStats({ totalLeads: leadsCount, activeDeals, conversionRate, projectedRevenue, totalCommissions, lostDeposits });
+      setStats({ totalLeads: leadsCount, activeDeals, conversionRate, projectedRevenue, totalCommissions, lostDeposits, commissionPercentage });
 
       setPipelineData(PIPELINE_STAGES.map((stage) => ({
         stage: STAGE_SHORT[stage] ?? stage,
@@ -218,7 +228,9 @@ export const Dashboard = () => {
             <h3 className="text-xl font-mono-numbers font-bold text-[#22C55E] leading-none">
               ${stats.totalCommissions.toLocaleString("es-MX", { minimumFractionDigits: 0 })}
             </h3>
-            <span className="text-[10px] text-[#22C55E] font-semibold">Deals ganados</span>
+            <span className="text-[10px] text-[#22C55E] font-semibold">
+              {(stats.commissionPercentage * 100).toFixed(0)}% sobre capital captado
+            </span>
           </div>
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
             style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.25)" }}>
