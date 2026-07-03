@@ -165,7 +165,19 @@ export const NegociacionesKanban = () => {
   };
 
   const totalPipeline = deals.filter((d) => !["Ganado","Perdido"].includes(d.stage)).reduce((sum, d) => sum + Number(d.value || 0), 0);
-  const totalWon = deals.filter((d) => d.stage === "Ganado").reduce((sum, d) => sum + Number(d.value || 0), 0);
+  
+  const wonDeals = deals.filter((d) => d.stage === "Ganado");
+  const totalWon = wonDeals.reduce((sum, d) => sum + Number(d.value || 0), 0);
+  
+  // Calcular porcentaje de comisión
+  const wonDealsCount = wonDeals.length;
+  let commissionPercentage = 0;
+  if (wonDealsCount >= 1 && wonDealsCount <= 3) commissionPercentage = 0.10;
+  else if (wonDealsCount >= 4 && wonDealsCount <= 6) commissionPercentage = 0.15;
+  else if (wonDealsCount >= 7) commissionPercentage = 0.20;
+
+  const totalCommissions = totalWon * commissionPercentage;
+
   // ✅ NUEVO: contador depósitos perdidos
   const lostCount = deals.filter((d) => d.stage === "Perdido").length;
 
@@ -212,6 +224,14 @@ export const NegociacionesKanban = () => {
             <span className="text-[11px] text-[#6B7FA3]">Ganado:</span>
             <span className="text-[11px] font-bold font-mono-numbers text-[#22C55E]">
               ${totalWon.toLocaleString("es-MX", { maximumFractionDigits: 0 })}
+            </span>
+          </div>
+          <div className="w-px h-3 bg-[rgba(212,175,55,0.2)]" />
+          <div className="flex items-center gap-1.5" title={`${(commissionPercentage * 100).toFixed(0)}% sobre capital captado`}>
+            <DollarSign className="h-3.5 w-3.5 text-[#22C55E]" />
+            <span className="text-[11px] text-[#6B7FA3]">Comisiones:</span>
+            <span className="text-[11px] font-bold font-mono-numbers text-[#22C55E]">
+              ${totalCommissions.toLocaleString("es-MX", { maximumFractionDigits: 0 })}
             </span>
           </div>
           <div className="w-px h-3 bg-[rgba(212,175,55,0.2)]" />
