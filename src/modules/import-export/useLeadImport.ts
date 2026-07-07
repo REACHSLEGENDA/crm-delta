@@ -94,30 +94,40 @@ export function useLeadImport() {
         .filter((r) => r.phone)
         .map((r) => r.phone);
 
-      const chunkSize = 50;
+      const chunkSize = 150; // Increased to 150 to reduce total requests
       
       const fetchEmails = async () => {
         if (!emails.length) return { data: [] };
-        const results = [];
+        const chunks = [];
         for (let i = 0; i < emails.length; i += chunkSize) {
-          const chunk = emails.slice(i, i + chunkSize);
-          const { data, error } = await supabase.from('leads').select('email').in('email', chunk);
-          if (error) throw error;
-          if (data) results.push(...data);
+          chunks.push(emails.slice(i, i + chunkSize));
         }
-        return { data: results };
+        const results = await Promise.all(
+          chunks.map(chunk => supabase.from('leads').select('email').in('email', chunk))
+        );
+        const data = [];
+        for (const res of results) {
+          if (res.error) throw res.error;
+          if (res.data) data.push(...res.data);
+        }
+        return { data };
       };
 
       const fetchPhones = async () => {
         if (!phones.length) return { data: [] };
-        const results = [];
+        const chunks = [];
         for (let i = 0; i < phones.length; i += chunkSize) {
-          const chunk = phones.slice(i, i + chunkSize);
-          const { data, error } = await supabase.from('leads').select('phone').in('phone', chunk);
-          if (error) throw error;
-          if (data) results.push(...data);
+          chunks.push(phones.slice(i, i + chunkSize));
         }
-        return { data: results };
+        const results = await Promise.all(
+          chunks.map(chunk => supabase.from('leads').select('phone').in('phone', chunk))
+        );
+        const data = [];
+        for (const res of results) {
+          if (res.error) throw res.error;
+          if (res.data) data.push(...res.data);
+        }
+        return { data };
       };
 
       const [emailRes, phoneRes] = await Promise.all([
@@ -198,8 +208,8 @@ export function useLeadImport() {
 
       const batchId: string = batch.id;
 
-      // Build insert payload in chunks of 100
-      const CHUNK = 100;
+      // Build insert payload in chunks of 1000 for much faster uploads
+      const CHUNK = 1000;
       let importedCount = 0;
       const errorRows: Array<{
         batch_id: string;
@@ -209,6 +219,7 @@ export function useLeadImport() {
         raw_data: Record<string, unknown>;
       }> = [];
 
+      const insertPromises = [];
       for (let i = 0; i < toInsert.length; i += CHUNK) {
         const chunk = toInsert.slice(i, i + CHUNK);
         const payload = chunk.map((row, idx) => {
@@ -239,7 +250,16 @@ export function useLeadImport() {
           };
         });
 
-        const { error: insertErr } = await supabase.from('leads').insert(payload);
+        // Push promise to array to execute them concurrently
+        insertPromises.push(
+          supabase.from('leads').insert(payload).then(({ error }) => ({ chunk, error }))
+        );
+      }
+
+      // Wait for all inserts to complete concurrently
+      const insertResults = await Promise.all(insertPromises);
+      
+      for (const { chunk, error: insertErr } of insertResults) {
         if (insertErr) {
           chunk.forEach((row) => {
             errorRows.push({
