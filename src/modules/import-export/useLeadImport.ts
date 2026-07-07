@@ -94,13 +94,35 @@ export function useLeadImport() {
         .filter((r) => r.phone)
         .map((r) => r.phone);
 
+      const chunkSize = 50;
+      
+      const fetchEmails = async () => {
+        if (!emails.length) return { data: [] };
+        const results = [];
+        for (let i = 0; i < emails.length; i += chunkSize) {
+          const chunk = emails.slice(i, i + chunkSize);
+          const { data, error } = await supabase.from('leads').select('email').in('email', chunk);
+          if (error) throw error;
+          if (data) results.push(...data);
+        }
+        return { data: results };
+      };
+
+      const fetchPhones = async () => {
+        if (!phones.length) return { data: [] };
+        const results = [];
+        for (let i = 0; i < phones.length; i += chunkSize) {
+          const chunk = phones.slice(i, i + chunkSize);
+          const { data, error } = await supabase.from('leads').select('phone').in('phone', chunk);
+          if (error) throw error;
+          if (data) results.push(...data);
+        }
+        return { data: results };
+      };
+
       const [emailRes, phoneRes] = await Promise.all([
-        emails.length
-          ? supabase.from('leads').select('email').in('email', emails)
-          : Promise.resolve({ data: [] }),
-        phones.length
-          ? supabase.from('leads').select('phone').in('phone', phones)
-          : Promise.resolve({ data: [] }),
+        fetchEmails(),
+        fetchPhones()
       ]);
 
       const existingEmails = new Set(
