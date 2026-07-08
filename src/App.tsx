@@ -13,6 +13,8 @@ import { ChatInterno } from "@/modules/chat/ChatInterno";
 import { AdminPanel } from "@/modules/admin/AdminPanel";
 import { RegisterInternal } from "@/modules/admin/RegisterInternal";
 import { ImportExportPage } from "@/modules/import-export/ImportExportPage";
+import { CumplimientoDashboard } from "@/modules/cumplimiento/CumplimientoDashboard";
+import { CumplimientoGuard } from "@/auth/CumplimientoGuard";
 
 const App = () => {
   return (
@@ -92,6 +94,18 @@ const App = () => {
                     <ImportExportPage />
                   </DashboardLayout>
                 </RoleGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cumplimiento"
+            element={
+              <ProtectedRoute>
+                <CumplimientoGuard>
+                  <DashboardLayout>
+                    <CumplimientoDashboard />
+                  </DashboardLayout>
+                </CumplimientoGuard>
               </ProtectedRoute>
             }
           />

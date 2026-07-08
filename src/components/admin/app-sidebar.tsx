@@ -21,6 +21,7 @@ import {
   PhoneCall,
   MessageSquare,
   ShieldAlert,
+  ShieldCheck,
   LogOut,
   ArrowUpDown,
 } from "lucide-react";
@@ -85,7 +86,7 @@ const NavItem = ({ item, onClick }: NavItemProps) => {
 
 export function AppSidebar() {
   const { profile, logout } = useAuth();
-  const { isSuperAdmin, isManager } = usePermissions();
+  const { isSuperAdmin, isManager, isCompliance } = usePermissions();
   const { openMobile, setOpenMobile } = useSidebar();
 
   const handleClick = () => {
@@ -99,6 +100,7 @@ export function AppSidebar() {
     { label: "Prospectos",      path: "/prospectos",    icon: UserPlus,        visible: true },
     { label: "Negociaciones",   path: "/negociaciones", icon: Kanban,          visible: true },
     { label: "Contactos",       path: "/contactos",     icon: Users,           visible: true },
+    { label: "Revisión Total",  path: "/cumplimiento",  icon: ShieldCheck,     visible: isSuperAdmin || isCompliance },
     { label: "Contact Center",  path: "/contact-center",icon: PhoneCall,       visible: true },
     { label: "Chat Interno",    path: "/chat",          icon: MessageSquare,   visible: true },
     { label: "Importar / Exportar", path: "/import-export", icon: ArrowUpDown, visible: isSuperAdmin || isManager },
