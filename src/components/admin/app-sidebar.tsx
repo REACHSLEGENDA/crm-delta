@@ -57,7 +57,7 @@ const NavItem = ({ item, onClick }: NavItemProps) => {
         <Link
           to={item.path}
           onClick={onClick}
-          className="flex items-center gap-3 px-3 py-2.5"
+          className="flex items-center gap-3 px-3 py-2.5 w-full group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
         >
           <div
             className={`flex items-center justify-center h-7 w-7 rounded-md shrink-0 transition-all duration-200 ${
@@ -128,15 +128,15 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="hover:bg-[rgba(212,175,55,0.05)] rounded-xl h-auto p-2"
+              className="hover:bg-[rgba(212,175,55,0.05)] rounded-xl h-auto p-2 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center"
             >
-              <Link to="/" className="flex items-center gap-3">
+              <Link to="/" className="flex items-center gap-3 group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:justify-center">
                 {/* Logo with glow ring */}
-                <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl overflow-hidden border border-[rgba(212,175,55,0.3)] bg-[rgba(212,175,55,0.06)] shadow-[0_0_16px_rgba(212,175,55,0.15)]">
+                <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-[rgba(212,175,55,0.3)] bg-[rgba(212,175,55,0.06)] shadow-[0_0_16px_rgba(212,175,55,0.15)]">
                   <img
                     src="/logo.png"
                     alt="Delta Capital"
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-cover scale-110"
                   />
                 </div>
 

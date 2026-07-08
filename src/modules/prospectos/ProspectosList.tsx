@@ -233,10 +233,12 @@ export const ProspectosList = () => {
   };
 
   const filteredLeads = leads.filter(lead => {
+    const term = search.toLowerCase();
     const fullName = `${lead.first_name} ${lead.last_name}`.toLowerCase();
-    const matchesSearch = fullName.includes(search.toLowerCase()) || 
-                          lead.email?.toLowerCase().includes(search.toLowerCase()) ||
-                          lead.phone?.includes(search);
+    const matchesSearch = fullName.includes(term) || 
+                          (lead.email && lead.email.toLowerCase().includes(term)) ||
+                          (lead.phone && lead.phone.includes(term)) ||
+                          (lead.id && lead.id.toLowerCase().includes(term));
     const matchesStatus = filterStatus ? lead.status === filterStatus : true;
     const matchesSource = filterSource ? lead.source === filterSource : true;
     const matchesAgent = filterAgent ? lead.agent_id === filterAgent : true;
@@ -321,7 +323,7 @@ export const ProspectosList = () => {
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#64748B]" />
           <input 
             type="text" 
-            placeholder="Buscar por nombre..." 
+            placeholder="Buscar por nombre, email o teléfono..." 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 pr-4 py-2 w-full text-sm bg-[#0D1428] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37]"
