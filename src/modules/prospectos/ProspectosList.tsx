@@ -9,12 +9,13 @@ import {
   ChevronLeft, ChevronRight, Users
 } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { ComplianceDocs } from "./ComplianceDocs";
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100, 200, 500, 1000, 3000];
 
 export const ProspectosList = () => {
   const { profile } = useAuth();
-  const { isSuperAdmin, isManager, isAgent, canDelete } = usePermissions();
+  const { isSuperAdmin, isManager, isAgent, canDelete, isRetention, isCompliance } = usePermissions();
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [agents, setAgents] = useState<Profile[]>([]);
@@ -647,6 +648,13 @@ export const ProspectosList = () => {
                   ))}
                 </div>
               </div>
+              
+              {/* Compliance Docs Section (Only for Cumplimiento) */}
+              {isCompliance && selectedLead && (
+                <div className="space-y-3 pt-4 border-t border-[rgba(212,175,55,0.12)]">
+                  <ComplianceDocs leadId={selectedLead.id} />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -670,9 +678,10 @@ export const ProspectosList = () => {
                 <input
                   type="text"
                   required
+                  disabled={isRetention || isCompliance}
                   value={formData.first_name}
                   onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37]"
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
                 />
               </div>
               <div>
@@ -680,9 +689,10 @@ export const ProspectosList = () => {
                 <input
                   type="text"
                   required
+                  disabled={isRetention || isCompliance}
                   value={formData.last_name}
                   onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37]"
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
                 />
               </div>
             </div>
@@ -693,18 +703,20 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Email</label>
                 <input
                   type="email"
+                  disabled={isRetention || isCompliance}
                   value={formData.email || ""}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37]"
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
                 />
               </div>
               <div>
                 <label className="block text-xs text-[#94A3B8] mb-1">Teléfono</label>
                 <input
                   type="text"
+                  disabled={isRetention || isCompliance}
                   value={formData.phone || ""}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37]"
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
                 />
               </div>
             </div>
@@ -716,17 +728,19 @@ export const ProspectosList = () => {
                 <input
                   type="text"
                   placeholder="Ej. México"
+                  disabled={isRetention || isCompliance}
                   value={formData.country || ""}
                   onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37]"
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
                 />
               </div>
               <div>
                 <label className="block text-xs text-[#94A3B8] mb-1">Capacidad de Inversión</label>
                 <select
                   value={formData.investment_capacity || ""}
+                  disabled={isRetention || isCompliance}
                   onChange={(e) => setFormData({ ...formData, investment_capacity: e.target.value })}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8] disabled:opacity-50"
                 >
                   <option value="">Seleccionar rango...</option>
                   <option value="Menos de $5,000">Menos de $5,000</option>
@@ -744,24 +758,42 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Estado</label>
                 <select
                   value={formData.status}
+                  disabled={isCompliance}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8] disabled:opacity-50"
                 >
-                  <option value="Nuevo">Nuevo</option>
-                  <option value="Contactado">Contactado</option>
-                  <option value="Interesado">Interesado</option>
-                  <option value="Asesoría">Asesoría</option>
-                  <option value="Depósito pendiente">Depósito pendiente</option>
-                  <option value="Ganado">Ganado</option>
-                  <option value="Perdido">Perdido</option>
+                  {!isRetention && (
+                    <>
+                      <option value="Nuevo">Nuevo</option>
+                      <option value="Contactado">Contactado</option>
+                      <option value="Interesado">Interesado</option>
+                      <option value="Asesoría">Asesoría</option>
+                      <option value="Depósito pendiente">Depósito pendiente</option>
+                      <option value="Ganado">Ganado</option>
+                      <option value="Perdido">Perdido</option>
+                    </>
+                  )}
+                  {isRetention && (
+                    <>
+                      <option value="Lead nuevo con comentarios">Lead nuevo con comentarios</option>
+                      <option value="Venta 1">Venta 1</option>
+                      <option value="Venta 2">Venta 2</option>
+                      <option value="Venta 3">Venta 3</option>
+                      <option value="Venta 4">Venta 4</option>
+                      <option value="Venta 5">Venta 5</option>
+                      <option value="Venta 6">Venta 6</option>
+                      <option value="Venta 7">Venta 7</option>
+                    </>
+                  )}
                 </select>
               </div>
               <div>
                 <label className="block text-xs text-[#94A3B8] mb-1">Fuente</label>
                 <select
                   value={formData.source}
+                  disabled={isRetention || isCompliance}
                   onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8] disabled:opacity-50"
                 >
                   <option value="Web">Web</option>
                   <option value="Recomendado">Recomendado</option>
@@ -797,8 +829,9 @@ export const ProspectosList = () => {
                 rows={3}
                 placeholder="Observaciones iniciales, contexto del prospecto..."
                 value={formData.comments || ""}
+                disabled={isCompliance}
                 onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
-                className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] resize-none"
+                className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] resize-none disabled:opacity-50"
               />
             </div>
 

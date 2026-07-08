@@ -15,6 +15,7 @@ export const AdminPanel = () => {
   const [editFirstName, setEditFirstName] = useState<string>("");
   const [editLastName, setEditLastName] = useState<string>("");
   const [editRole, setEditRole] = useState<string>("AGENT");
+  const [editDepartment, setEditDepartment] = useState<string>("Ventas");
   const [editActive, setEditActive] = useState<boolean>(true);
 
   const fetchProfiles = async () => {
@@ -49,6 +50,7 @@ export const AdminPanel = () => {
           first_name: editFirstName,
           last_name: editLastName,
           role: editRole as any,
+          department: editDepartment as any,
           active: editActive,
         })
         .eq("id", editingProfile.id);
@@ -104,6 +106,7 @@ export const AdminPanel = () => {
                 <th className="p-4">Usuario</th>
                 <th className="p-4">Email</th>
                 <th className="p-4">Rol en el Sistema</th>
+                <th className="p-4">Departamento</th>
                 <th className="p-4">Estado de Cuenta</th>
                 <th className="p-4">Último Acceso</th>
                 <th className="p-4 text-right">Acciones</th>
@@ -119,6 +122,11 @@ export const AdminPanel = () => {
                   <td className="p-4">
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider bg-[rgba(212,175,55,0.05)] border border-[rgba(212,175,55,0.2)] text-[#D4AF37]">
                       {prof.role}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider bg-[#050814] border border-[#94A3B8]/30 text-[#94A3B8]">
+                      {prof.department || 'Ventas'}
                     </span>
                   </td>
                   <td className="p-4">
@@ -138,6 +146,7 @@ export const AdminPanel = () => {
                         setEditFirstName(prof.first_name || "");
                         setEditLastName(prof.last_name || "");
                         setEditRole(prof.role);
+                        setEditDepartment(prof.department || "Ventas");
                         setEditActive(prof.active);
                       }}
                       className="p-1 hover:text-[#D4AF37] text-[#94A3B8]"
@@ -205,6 +214,19 @@ export const AdminPanel = () => {
                 <option value="MANAGER">GERENTE — Gestión y Monitoreo</option>
                 <option value="SUPERVISOR">SUPERVISOR — Seguimiento de Equipo</option>
                 <option value="AGENT">EJECUTIVO — Seguimiento Propio</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-[#94A3B8] mb-1">Departamento</label>
+              <select
+                value={editDepartment}
+                onChange={(e) => setEditDepartment(e.target.value)}
+                className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none text-[#94A3B8]"
+              >
+                <option value="Ventas">Ventas</option>
+                <option value="Retencion">Retención</option>
+                <option value="Cumplimiento">Cumplimiento</option>
               </select>
             </div>
 

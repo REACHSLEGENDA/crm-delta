@@ -1,6 +1,7 @@
 export type UserRole = 'SUPERADMIN' | 'MANAGER' | 'AGENT' | 'SUPERVISOR';
-export type LeadStatus = 'Nuevo' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido';
-export type DealStage = 'Nuevo lead' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido';
+export type Department = 'Ventas' | 'Retencion' | 'Cumplimiento';
+export type LeadStatus = 'Nuevo' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido' | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
+export type DealStage = 'Nuevo lead' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido' | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
 export type CallDisposition = 'Interesado' | 'No interesado' | 'Buzón' | 'Callback' | 'Depósito confirmado';
 export type ChannelType = 'general' | 'ventas' | 'soporte' | 'alertas';
 export type RuleStatus = 'active' | 'inactive';
@@ -11,6 +12,7 @@ export interface Profile {
   first_name?: string;
   last_name?: string;
   role: UserRole;
+  department: Department;
   team_id?: string | null;
   active: boolean;
   last_seen_at?: string;
@@ -129,8 +131,18 @@ export interface Note {
   lead_id?: string;
   deal_id?: string;
   contact_id?: string;
-  user_id?: string;
+  user_id: string;
   content: string;
+  created_at: string;
+}
+
+export interface ComplianceDocument {
+  id: string;
+  lead_id: string;
+  document_type: string;
+  file_path: string;
+  file_name: string;
+  uploaded_by?: string | null;
   created_at: string;
 }
 

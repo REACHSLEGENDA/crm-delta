@@ -9,12 +9,22 @@ export const usePermissions = () => {
   const isSupervisor = role === "SUPERVISOR"; // Supervisor
   const isAgent      = role === "AGENT";      // Ejecutivo
 
+  const department = profile?.department || 'Ventas';
+  
+  const isSales = department === 'Ventas';
+  const isRetention = department === 'Retencion';
+  const isCompliance = department === 'Cumplimiento';
+
   return {
     role,
+    department,
     isSuperAdmin,
     isManager,
     isSupervisor,
     isAgent,
+    isSales,
+    isRetention,
+    isCompliance,
 
     // Solo ADMIN puede auditar / impersonar perspectivas
     canAudit: isSuperAdmin,

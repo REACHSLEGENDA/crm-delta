@@ -8,6 +8,7 @@ export const RegisterInternal = () => {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [role, setRole] = useState("AGENT");
+  const [department, setDepartment] = useState("Ventas");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -27,6 +28,7 @@ export const RegisterInternal = () => {
             first_name: firstName,
             last_name: lastName,
             role: role,
+            department: department,
           },
         },
       });
@@ -45,6 +47,7 @@ export const RegisterInternal = () => {
         setFirstName("");
         setLastName("");
         setRole("AGENT");
+        setDepartment("Ventas");
       }
     } catch (err: any) {
       console.error(err);
@@ -133,17 +136,31 @@ export const RegisterInternal = () => {
             />
           </div>
 
-          <div>
-            <label className="block text-xs text-[#94A3B8] mb-1 font-semibold">Rol en la Plataforma</label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
-            >
-              <option value="AGENT">EJECUTIVO — Seguimiento Propio</option>
-              <option value="SUPERVISOR">SUPERVISOR — Seguimiento de Equipo</option>
-              <option value="MANAGER">GERENTE — Gestión y Monitoreo</option>
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs text-[#94A3B8] mb-1 font-semibold">Rol en la Plataforma</label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
+              >
+                <option value="AGENT">EJECUTIVO — Seguimiento Propio</option>
+                <option value="SUPERVISOR">SUPERVISOR — Seguimiento de Equipo</option>
+                <option value="MANAGER">GERENTE — Gestión y Monitoreo</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-[#94A3B8] mb-1 font-semibold">Departamento (Área)</label>
+              <select
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
+              >
+                <option value="Ventas">Ventas</option>
+                <option value="Retencion">Retención</option>
+                <option value="Cumplimiento">Cumplimiento</option>
+              </select>
+            </div>
           </div>
 
           <button
