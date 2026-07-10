@@ -21,6 +21,43 @@ export const ContactCenter = () => {
 
   const [callHistory, setCallHistory] = useState<Call[]>([]);
 
+  // Búsqueda para agregar a cola
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const handleSearchLeads = async (query: string) => {
+    setSearchQuery(query);
+    if (query.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      let q = supabase.from("leads").select("id, first_name, last_name, phone, in_call_queue");
+      if (isAgent) {
+        q = q.eq("agent_id", profile?.id);
+      }
+      const { data } = await q.or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%`).limit(5);
+      if (data) setSearchResults(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleAddToQueue = async (leadId: string) => {
+    try {
+      await supabase.from("leads").update({ in_call_queue: true }).eq("id", leadId);
+      setSearchQuery("");
+      setSearchResults([]);
+      fetchQueue();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // ✅ CORREGIDO: la cola ahora se filtra por agent_id para agentes
   const fetchQueue = async () => {
     try {
@@ -95,7 +132,7 @@ export const ContactCenter = () => {
       if (profile?.id) {
         let query = supabase
           .from("calls")
-          .select("*, agent:profiles(first_name, last_name), lead:leads(first_name, last_name)")
+          .select("*, profiles(first_name, last_name), leads(first_name, last_name)")
           .order("created_at", { ascending: false })
           .limit(20);
         
@@ -214,6 +251,40 @@ export const ContactCenter = () => {
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Buscador para agregar a la cola */}
+          <div className="relative mt-4 mb-2">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#94A3B8]" />
+            <input
+              type="text"
+              placeholder="Buscar para agregar a cola..."
+              value={searchQuery}
+              onChange={(e) => handleSearchLeads(e.target.value)}
+              className="pl-9 pr-4 py-2 w-full text-xs bg-[#050814] border border-[rgba(212,175,55,0.2)] rounded-lg text-[#F8FAFC] focus:outline-none focus:border-[#D4AF37]"
+            />
+            {searchResults.length > 0 && (
+              <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-[#0D1428] border border-[rgba(212,175,55,0.3)] rounded-lg shadow-xl overflow-hidden">
+                {searchResults.map(res => (
+                  <div key={res.id} className="p-2 border-b border-[rgba(212,175,55,0.1)] hover:bg-[rgba(212,175,55,0.05)] flex items-center justify-between transition-colors">
+                    <div>
+                      <p className="text-xs font-bold text-white">{res.first_name} {res.last_name}</p>
+                      <p className="text-[10px] text-[#94A3B8]">{res.phone || "Sin teléfono"}</p>
+                    </div>
+                    {res.in_call_queue ? (
+                      <span className="text-[10px] text-[#64748B]">En cola</span>
+                    ) : (
+                      <button 
+                        onClick={() => handleAddToQueue(res.id)}
+                        className="p-1.5 bg-[rgba(212,175,55,0.1)] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-black rounded"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {loading ? (
@@ -345,19 +416,33 @@ export const ContactCenter = () => {
 
           <div className="space-y-3 max-h-[60vh] overflow-y-auto">
             {callHistory.map(call => (
-              <div key={call.id} className="p-3 bg-[#050814] border border-[rgba(212,175,55,0.08)] rounded text-xs space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                    call.disposition === "Depósito confirmado" ? "bg-green-950/20 text-green-400" :
-                    call.disposition === "Interesado" ? "bg-[rgba(212,175,55,0.05)] text-[#D4AF37]" :
-                    "bg-[#17213D] text-[#94A3B8]"
-                  }`}>
+              <div key={call.id} className="p-3 bg-[#0D1428] border border-[rgba(212,175,55,0.1)] rounded hover:border-[rgba(212,175,55,0.3)] transition-all">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-[#F8FAFC]">
+                    {call.leads ? `${call.leads.first_name} ${call.leads.last_name}` : "Prospecto"}
+                  </span>
+                  <span className="text-[10px] text-[#94A3B8] font-mono">
+                    {new Date(call.created_at).toLocaleDateString()} {new Date(call.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#17213D] text-[#E6C766]">
                     {call.disposition}
                   </span>
-                  <span className="font-mono text-[#64748B]">{call.duration_seconds}s</span>
+                  <span className="text-[10px] text-[#64748B] flex items-center gap-1">
+                    <Clock className="h-3 w-3" /> {Math.floor(call.duration_seconds / 60)}:{(call.duration_seconds % 60).toString().padStart(2, "0")}
+                  </span>
                 </div>
-                {call.notes && <p className="text-[#94A3B8] italic">"{call.notes}"</p>}
-                <span className="text-[9px] text-[#64748B] block">{new Date(call.created_at).toLocaleString()}</span>
+                {call.notes && (
+                  <p className="text-xs text-[#94A3B8] italic mt-1 border-t border-[rgba(212,175,55,0.1)] pt-1">
+                    "{call.notes}"
+                  </p>
+                )}
+                {(isSuperAdmin || isManager) && call.profiles && (
+                  <p className="text-[10px] text-[#D4AF37] mt-1 text-right">
+                    Agente: {call.profiles.first_name} {call.profiles.last_name}
+                  </p>
+                )}
               </div>
             ))}
             {callHistory.length === 0 && (
