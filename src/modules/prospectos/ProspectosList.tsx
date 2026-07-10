@@ -390,6 +390,7 @@ export const ProspectosList = () => {
           style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.25)" }}>
           <Users className="h-4 w-4 text-[#D4AF37]" />
           <span className="text-xs font-semibold text-[#D4AF37]">{selectedIds.size} seleccionados</span>
+          <div className="flex items-center gap-2 ml-auto">
             {(isSuperAdmin || isManager) && (
               <>
                 <select
