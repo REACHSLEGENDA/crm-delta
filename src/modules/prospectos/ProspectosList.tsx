@@ -446,6 +446,7 @@ export const ProspectosList = () => {
                   <th className="p-4">Email</th>
                   <th className="p-4">Teléfono</th>
                   <th className="p-4">Fuente</th>
+                  <th className="p-4">Agente</th>
                   <th className="p-4">Estado</th>
                   <th className="p-4 text-right">Acciones</th>
                 </tr>
@@ -476,6 +477,11 @@ export const ProspectosList = () => {
                       <span className="px-2 py-0.5 rounded bg-[#17213D] text-[#E6C766] border border-[rgba(212,175,55,0.15)]">
                         {lead.source}
                       </span>
+                    </td>
+                    <td className="p-4 text-xs text-[#94A3B8] font-medium">
+                      {agents.find(a => a.id === lead.agent_id)
+                        ? `${agents.find(a => a.id === lead.agent_id)?.first_name} ${agents.find(a => a.id === lead.agent_id)?.last_name}`
+                        : <span className="text-[10px] uppercase tracking-wider opacity-60">Sin asignar</span>}
                     </td>
                     <td className="p-4 text-xs">
                       <span className={`px-2 py-0.5 rounded border ${
