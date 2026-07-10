@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { Call } from "@/types";
-import { PhoneCall, PhoneOff, Save, Clock, History, ListCollapse, Trash2 } from "lucide-react";
+import { PhoneCall, PhoneOff, Save, Clock, History, ListCollapse, Trash2, Search, Plus } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 export const ContactCenter = () => {
