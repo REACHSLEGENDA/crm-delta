@@ -384,27 +384,54 @@ export const ProspectosList = () => {
       </div>
 
       {/* ✅ NUEVO: Barra de acciones masivas */}
-      {selectedIds.size > 0 && (isSuperAdmin || isManager) && (
+      {selectedIds.size > 0 && (
+
         <div className="flex items-center gap-3 p-3 rounded-lg"
           style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.25)" }}>
           <Users className="h-4 w-4 text-[#D4AF37]" />
           <span className="text-xs font-semibold text-[#D4AF37]">{selectedIds.size} seleccionados</span>
-          <div className="flex items-center gap-2 ml-auto">
-            <select
-              value={bulkAgentId}
-              onChange={(e) => setBulkAgentId(e.target.value)}
-              className="px-3 py-1.5 text-xs bg-[#0D1428] border border-[rgba(212,175,55,0.2)] rounded text-[#94A3B8] focus:outline-none focus:border-[#D4AF37]"
-            >
-              <option value="">Asignar agente...</option>
-              {agents.map(a => (<option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>))}
-            </select>
+            {(isSuperAdmin || isManager) && (
+              <>
+                <select
+                  value={bulkAgentId}
+                  onChange={(e) => setBulkAgentId(e.target.value)}
+                  className="px-3 py-1.5 text-xs bg-[#0D1428] border border-[rgba(212,175,55,0.2)] rounded text-[#94A3B8] focus:outline-none focus:border-[#D4AF37]"
+                >
+                  <option value="">Asignar agente...</option>
+                  {agents.map(a => (<option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>))}
+                </select>
+                <button
+                  onClick={handleBulkAssign}
+                  disabled={!bulkAgentId || bulkAssigning}
+                  className="gold-button-primary px-3 py-1.5 text-xs font-bold rounded disabled:opacity-50"
+                >
+                  {bulkAssigning ? "Asignando..." : "Asignar"}
+                </button>
+              </>
+            )}
+            
+            {/* Botón para agregar a la cola de llamadas */}
             <button
-              onClick={handleBulkAssign}
-              disabled={!bulkAgentId || bulkAssigning}
-              className="gold-button-primary px-3 py-1.5 text-xs font-bold rounded disabled:opacity-50"
+              onClick={async () => {
+                try {
+                  const idsArray = Array.from(selectedIds);
+                  const { error } = await supabase.from('leads').update({ in_call_queue: true }).in('id', idsArray);
+                  if (!error) {
+                    alert("Agregados a la cola de llamadas exitosamente.");
+                    setSelectedIds(new Set());
+                  } else {
+                    console.error("Error al agregar a la cola:", error);
+                    alert("Error al agregar a la cola.");
+                  }
+                } catch (err) {
+                  console.error(err);
+                }
+              }}
+              className="px-3 py-1.5 text-xs font-bold rounded bg-[rgba(212,175,55,0.15)] text-[#D4AF37] hover:bg-[rgba(212,175,55,0.25)] transition-colors border border-[rgba(212,175,55,0.3)]"
             >
-              {bulkAssigning ? "Asignando..." : "Asignar"}
+              Agregar a Cola
             </button>
+
             <button
               onClick={() => setSelectedIds(new Set())}
               className="px-3 py-1.5 text-xs text-[#64748B] hover:text-[#F8FAFC] transition-colors"
@@ -432,16 +459,14 @@ export const ProspectosList = () => {
               <thead>
                 <tr className="border-b border-[rgba(212,175,55,0.2)] bg-[#0D1428] text-xs font-semibold text-[#D4AF37] uppercase tracking-wider">
                   {/* ✅ Checkbox selección masiva */}
-                  {(isSuperAdmin || isManager) && (
-                    <th className="p-4 w-10">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.size === paginatedLeads.length && paginatedLeads.length > 0}
-                        onChange={toggleSelectAll}
-                        className="accent-[#D4AF37] h-3.5 w-3.5 cursor-pointer"
-                      />
-                    </th>
-                  )}
+                  <th className="p-4 w-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === paginatedLeads.length && paginatedLeads.length > 0}
+                      onChange={toggleSelectAll}
+                      className="accent-[#D4AF37] h-3.5 w-3.5 cursor-pointer"
+                    />
+                  </th>
                   <th className="p-4">Nombre</th>
                   <th className="p-4">Email</th>
                   <th className="p-4">Teléfono</th>
@@ -460,16 +485,14 @@ export const ProspectosList = () => {
                     }`}
                     onClick={() => handleOpenLeadDetails(lead)}
                   >
-                    {(isSuperAdmin || isManager) && (
-                      <td className="p-4" onClick={(e) => { e.stopPropagation(); toggleSelect(lead.id); }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(lead.id)}
-                          onChange={() => toggleSelect(lead.id)}
-                          className="accent-[#D4AF37] h-3.5 w-3.5 cursor-pointer"
-                        />
-                      </td>
-                    )}
+                    <td className="p-4" onClick={(e) => { e.stopPropagation(); toggleSelect(lead.id); }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(lead.id)}
+                        onChange={() => toggleSelect(lead.id)}
+                        className="accent-[#D4AF37] h-3.5 w-3.5 cursor-pointer"
+                      />
+                    </td>
                     <td className="p-4 font-semibold text-[#F8FAFC]">{lead.first_name} {lead.last_name}</td>
                     <td className="p-4 text-[#94A3B8] font-mono">{lead.email || "-"}</td>
                     <td className="p-4 text-[#94A3B8] font-mono">{lead.phone || "-"}</td>

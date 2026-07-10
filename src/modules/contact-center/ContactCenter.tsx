@@ -8,7 +8,7 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 export const ContactCenter = () => {
   const { profile } = useAuth();
-  const { isAgent, canDelete } = usePermissions();
+  const { isAgent, isSuperAdmin, isManager, canDelete } = usePermissions();
   const [queue, setQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,7 +28,7 @@ export const ContactCenter = () => {
       let query = supabase
         .from("leads")
         .select("id, first_name, last_name, phone, email, status, agent_id")
-        .in("status", ["Nuevo", "Contactado"])
+        .eq("in_call_queue", true)
         .order("updated_at", { ascending: false });
 
       // ✅ CLAVE: Agentes solo ven SU base, no la de todos
@@ -52,14 +52,17 @@ export const ContactCenter = () => {
   
   const [confirmClearModal, setConfirmClearModal] = useState(false);
 
-  // ✅ NUEVO: Eliminar prospecto de la cola
   const confirmDeleteFromQueue = async () => {
     try {
-      const { error } = await supabase.from("leads").delete().eq("id", confirmModal.targetId);
+      const { error } = await supabase.from("leads").update({ in_call_queue: false }).eq("id", confirmModal.targetId);
       if (!error) {
         setQueue(prev => prev.filter(item => item.id !== confirmModal.targetId));
+        if (activeCall?.id === confirmModal.targetId) {
+          setActiveCall(null);
+          setCallStatus("idle");
+        }
       } else {
-        console.error("Error eliminando prospecto:", error);
+        console.error("Error quitando prospecto de cola:", error);
       }
     } catch (err) {
       console.error(err);
@@ -73,10 +76,12 @@ export const ContactCenter = () => {
   const confirmClearQueue = async () => {
     if (queue.length === 0) return;
     try {
-      const idsToDelete = queue.map(item => item.id);
-      const { error } = await supabase.from("leads").delete().in("id", idsToDelete);
+      const idsToUpdate = queue.map(item => item.id);
+      const { error } = await supabase.from("leads").update({ in_call_queue: false }).in("id", idsToUpdate);
       if (!error) {
         setQueue([]);
+        setActiveCall(null);
+        setCallStatus("idle");
       } else {
         console.error("Error vaciando la cola:", error);
       }
@@ -88,13 +93,18 @@ export const ContactCenter = () => {
   const fetchHistory = async () => {
     try {
       if (profile?.id) {
-        const { data } = await supabase
+        let query = supabase
           .from("calls")
-          .select("*")
-          .eq("agent_id", profile.id)
+          .select("*, agent:profiles(first_name, last_name), lead:leads(first_name, last_name)")
           .order("created_at", { ascending: false })
-          .limit(10);
-        if (data) setCallHistory(data as Call[]);
+          .limit(20);
+        
+        if (isAgent) {
+          query = query.eq("agent_id", profile.id);
+        }
+
+        const { data } = await query;
+        if (data) setCallHistory(data as any[]);
       }
     } catch (err) {
       console.error(err);
@@ -117,11 +127,16 @@ export const ContactCenter = () => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [callStatus]);
 
-  const handleInitiateCall = (target: any) => {
+  const handleSelectCall = (target: any) => {
     setActiveCall(target);
-    setCallStatus("calling");
+    setCallStatus("idle");
     setDuration(0);
-    setTimeout(() => { setCallStatus("active"); }, 2000);
+    setNotes("");
+  };
+
+  const handleStartCall = () => {
+    setCallStatus("calling");
+    setTimeout(() => { setCallStatus("active"); }, 1500); // Simular conexión
   };
 
   const handleHangup = () => { setCallStatus("wrap_up"); };
@@ -152,6 +167,9 @@ export const ContactCenter = () => {
         } else if (disposition === "Interesado") {
           await supabase.from("leads").update({ status: "Interesado" }).eq("id", activeCall.id);
         }
+
+        // ✅ Quitamos automáticamente de la cola
+        await supabase.from("leads").update({ in_call_queue: false }).eq("id", activeCall.id);
 
         fetchQueue();
         fetchHistory();
@@ -225,9 +243,9 @@ export const ContactCenter = () => {
                       </button>
                     )}
                     <button
-                      onClick={() => handleInitiateCall(item)}
+                      onClick={() => handleSelectCall(item)}
                       className="p-1.5 rounded-full bg-[rgba(212,175,55,0.1)] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-black transition-colors"
-                      title="Iniciar Llamada"
+                      title="Seleccionar para Llamar"
                     >
                       <PhoneCall className="h-3 w-3" />
                     </button>
@@ -257,9 +275,10 @@ export const ContactCenter = () => {
                   <span className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider ${
                     callStatus === "calling" ? "bg-amber-950/20 text-amber-400 border border-amber-500/30 animate-pulse" :
                     callStatus === "active" ? "bg-green-950/20 text-green-400 border border-green-500/30" :
-                    "bg-[#17213D] text-[#E6C766]"
+                    callStatus === "wrap_up" ? "bg-[#17213D] text-[#E6C766]" :
+                    "bg-[rgba(212,175,55,0.1)] text-[#D4AF37]"
                   }`}>
-                    {callStatus === "calling" ? "Conectando..." : callStatus === "active" ? "En Línea" : "Tipificación"}
+                    {callStatus === "calling" ? "Conectando..." : callStatus === "active" ? "En Línea" : callStatus === "wrap_up" ? "Tipificación" : "Listo para llamar"}
                   </span>
 
                   {callStatus === "active" && (
@@ -270,9 +289,15 @@ export const ContactCenter = () => {
                   )}
                 </div>
 
+                {callStatus === "idle" && (
+                  <button onClick={handleStartCall} className="mx-auto flex items-center gap-2 px-6 py-2.5 bg-[#22C55E] hover:bg-[#16a34a] text-[#050814] rounded font-bold text-xs uppercase transition-all shadow-[0_0_15px_rgba(34,197,94,0.3)]">
+                    <PhoneCall className="h-4 w-4" /> Iniciar
+                  </button>
+                )}
+
                 {(callStatus === "calling" || callStatus === "active") && (
-                  <button onClick={handleHangup} className="mx-auto flex items-center gap-2 px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-xs uppercase transition-all">
-                    <PhoneOff className="h-4 w-4" /> Colgar
+                  <button onClick={handleHangup} className="mx-auto flex items-center gap-2 px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-xs uppercase transition-all shadow-[0_0_15px_rgba(239,68,68,0.3)]">
+                    <PhoneOff className="h-4 w-4" /> Finalizar
                   </button>
                 )}
 
