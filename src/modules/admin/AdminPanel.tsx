@@ -17,6 +17,7 @@ export const AdminPanel = () => {
   const [editRole, setEditRole] = useState<string>("AGENT");
   const [editDepartment, setEditDepartment] = useState<string>("Ventas");
   const [editActive, setEditActive] = useState<boolean>(true);
+  const [editPassword, setEditPassword] = useState<string>("");
 
   const fetchProfiles = async () => {
     try {
@@ -54,6 +55,18 @@ export const AdminPanel = () => {
           active: editActive,
         })
         .eq("id", editingProfile.id);
+
+      if (editPassword.trim() !== "") {
+        const { error: fnError } = await supabase.functions.invoke('admin_update_password', {
+          body: { target_user_id: editingProfile.id, new_password: editPassword }
+        });
+        if (fnError) {
+          console.error("Error cambiando contraseña:", fnError);
+          alert("Error al cambiar la contraseña. Asegúrate de tener permisos.");
+        } else {
+          alert("Contraseña actualizada con éxito.");
+        }
+      }
 
       if (!error) {
         setEditingProfile(null);
@@ -148,6 +161,7 @@ export const AdminPanel = () => {
                         setEditRole(prof.role);
                         setEditDepartment(prof.department || "Ventas");
                         setEditActive(prof.active);
+                        setEditPassword("");
                       }}
                       className="p-1 hover:text-[#D4AF37] text-[#94A3B8]"
                       title="Editar rol"
@@ -240,6 +254,18 @@ export const AdminPanel = () => {
                 <option value="true">Activo / Permitir Acceso</option>
                 <option value="false">Inactivo / Bloquear Acceso</option>
               </select>
+            </div>
+
+            <div className="pt-2 border-t border-[rgba(212,175,55,0.1)]">
+              <label className="block text-xs text-[#94A3B8] mb-1">Cambiar Contraseña (Opcional)</label>
+              <input
+                type="text"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+                className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-white"
+                placeholder="Escribe una nueva contraseña..."
+              />
+              <p className="text-[10px] text-[#64748B] mt-1">Deja en blanco si no deseas cambiarla.</p>
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
