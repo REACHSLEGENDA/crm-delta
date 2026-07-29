@@ -222,12 +222,16 @@ export function normalizeImportedLead(
   if (!first_name) errors.push('Nombre requerido');
 
   // 2. Email
-  const email = (vals.email ?? '').toLowerCase().trim();
+  let email = (vals.email ?? '').toLowerCase().trim();
   const phone = vals.phone ?? '';
+  
+  if (email && !isValidEmail(email)) {
+    warnings.push('Email con formato inválido — se omitirá');
+    email = '';
+  }
+
   if (!email && !phone) {
-    errors.push('Se requiere email o teléfono');
-  } else if (email && !isValidEmail(email)) {
-    errors.push(`Email con formato inválido`);
+    errors.push('Se requiere email válido o teléfono');
   } else if (!email && phone) {
     warnings.push('Sin email — solo teléfono');
   }
