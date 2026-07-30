@@ -214,12 +214,23 @@ export const ProspectosList = () => {
 
   const confirmDeleteLead = async () => {
     try {
-      const { error } = await supabase.from("leads").delete().eq("id", confirmModal.targetId);
-      if (!error) {
-        setLeads(leads.filter(l => l.id !== confirmModal.targetId));
-        if (selectedLead?.id === confirmModal.targetId) {
-          setIsDrawerOpen(false);
-          setSelectedLead(null);
+      if (confirmModal.targetId === "BULK") {
+        const idsArray = Array.from(selectedIds);
+        const { error } = await supabase.from("leads").delete().in("id", idsArray);
+        if (!error) {
+          setLeads(leads.filter(l => !selectedIds.has(l.id)));
+          setSelectedIds(new Set());
+          setConfirmModal({ ...confirmModal, isOpen: false });
+        }
+      } else {
+        const { error } = await supabase.from("leads").delete().eq("id", confirmModal.targetId);
+        if (!error) {
+          setLeads(leads.filter(l => l.id !== confirmModal.targetId));
+          if (selectedLead?.id === confirmModal.targetId) {
+            setIsDrawerOpen(false);
+            setSelectedLead(null);
+          }
+          setConfirmModal({ ...confirmModal, isOpen: false });
         }
       }
     } catch (err) {
@@ -432,6 +443,16 @@ export const ProspectosList = () => {
             >
               Agregar a Cola
             </button>
+
+            {/* Botón para eliminar múltiples (solo si tiene permisos) */}
+            {canDelete && (
+              <button
+                onClick={() => setConfirmModal({ isOpen: true, targetId: "BULK", targetName: `${selectedIds.size} prospectos seleccionados` })}
+                className="px-3 py-1.5 text-xs font-bold rounded bg-red-900/20 text-red-400 hover:bg-red-900/40 transition-colors border border-red-500/30"
+              >
+                Eliminar Seleccionados
+              </button>
+            )}
 
             <button
               onClick={() => setSelectedIds(new Set())}
