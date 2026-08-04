@@ -26,6 +26,7 @@ export const ProspectosList = () => {
   const [filterStatus, setFilterStatus] = useState("");
   const [filterSource, setFilterSource] = useState("");
   const [filterAgent, setFilterAgent] = useState("");
+  const [filterCountry, setFilterCountry] = useState("");
 
   // ✅ NUEVO: Paginación
   const [pageSize, setPageSize] = useState(20);
@@ -254,9 +255,13 @@ export const ProspectosList = () => {
     const matchesStatus = filterStatus ? lead.status === filterStatus : true;
     const matchesSource = filterSource ? lead.source === filterSource : true;
     const matchesAgent = filterAgent ? lead.agent_id === filterAgent : true;
+    const matchesCountry = filterCountry ? lead.country === filterCountry : true;
 
-    return matchesSearch && matchesStatus && matchesSource && matchesAgent;
+    return matchesSearch && matchesStatus && matchesSource && matchesAgent && matchesCountry;
   });
+
+  // Unique countries for the filter dropdown
+  const uniqueCountries = Array.from(new Set(leads.map(l => l.country).filter(Boolean))).sort();
 
   // ✅ Paginación
   const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
@@ -330,7 +335,7 @@ export const ProspectosList = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 glass-card">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 glass-card">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#64748B]" />
           <input 
@@ -355,6 +360,18 @@ export const ProspectosList = () => {
             <option value="Depósito pendiente">Depósito pendiente</option>
             <option value="Ganado">Ganado</option>
             <option value="Perdido">Perdido</option>
+          </select>
+        </div>
+        <div>
+          <select 
+            value={filterCountry}
+            onChange={(e) => setFilterCountry(e.target.value)}
+            className="px-3 py-2 w-full text-sm bg-[#0D1428] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
+          >
+            <option value="">-- Todos los Países --</option>
+            {uniqueCountries.map(country => (
+              <option key={country} value={country}>{country}</option>
+            ))}
           </select>
         </div>
         <div>
@@ -386,6 +403,7 @@ export const ProspectosList = () => {
           onClick={() => {
             setSearch("");
             setFilterStatus("");
+            setFilterCountry("");
             setFilterSource("");
             setFilterAgent("");
           }}
