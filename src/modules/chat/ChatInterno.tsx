@@ -23,11 +23,13 @@ export const ChatInterno = () => {
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
+  const [allUsers, setAllUsers] = useState<Profile[]>([]);
 
   // ✅ NUEVO: Estado para crear canal
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
-  const [newChannelType, setNewChannelType] = useState<"general"|"ventas"|"alertas"|"soporte">("general");
+  const [newChannelType, setNewChannelType] = useState<"general"|"ventas"|"alertas"|"soporte"|"privado">("general");
+  const [newChannelMembers, setNewChannelMembers] = useState<string[]>([]);
   const [creatingChannel, setCreatingChannel] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -67,6 +69,13 @@ export const ChatInterno = () => {
           }
           
           // Canales creados manualmente: el `type` define quién puede entrar
+          if (ch.type === "privado") {
+            // El fallback `|| []` asegura que no falle si members es null. 
+            // isSuperAdmin también podría verlos si se desea, pero usualmente privado es solo miembros.
+            if (isSuperAdmin) return true;
+            return (ch.members || []).includes(profile.id);
+          }
+
           if (isSuperAdmin) return true; // Superadmin ve todo
           
           if (ch.type === "general") return true; // Todos los roles
@@ -87,9 +96,17 @@ export const ChatInterno = () => {
     }
   };
 
+  const fetchAllUsers = async () => {
+    try {
+      const { data, error } = await supabase.from("profiles").select("*").order("first_name", { ascending: true });
+      if (!error && data) setAllUsers(data as Profile[]);
+    } catch (err) { console.error(err); }
+  };
+
   useEffect(() => {
     if (profile) {
       ensureDefaultChannels().then(fetchChannels);
+      if (canManageChannels) fetchAllUsers();
     }
   }, [profile]);
 
@@ -99,12 +116,18 @@ export const ChatInterno = () => {
     if (!newChannelName.trim()) return;
     setCreatingChannel(true);
     try {
+      const payload: any = { name: newChannelName.trim(), type: newChannelType };
+      if (newChannelType === "privado") {
+        payload.members = Array.from(new Set([...newChannelMembers, profile?.id]));
+      }
+
       const { error } = await supabase
         .from("channels")
-        .insert({ name: newChannelName.trim(), type: newChannelType });
+        .insert(payload);
       if (!error) {
         setNewChannelName("");
         setNewChannelType("general");
+        setNewChannelMembers([]);
         setShowCreateChannel(false);
         await fetchChannels();
       } else {
@@ -162,6 +185,9 @@ export const ChatInterno = () => {
           table: "messages",
           filter: `channel_id=eq.${selectedChannel.id}`,
         }, async (payload) => {
+          // Ignorar mis propios mensajes que ya se inyectaron de forma optimista
+          if (payload.new.user_id === profile?.id) return;
+
           const { data: profileData } = await supabase
             .from("profiles")
             .select("first_name, last_name, email")
@@ -172,7 +198,10 @@ export const ChatInterno = () => {
             ...(payload.new as Message),
             profiles: profileData || undefined,
           };
-          setMessages((prev) => [...prev, newMessageWithProfile]);
+          setMessages((prev) => {
+            if (prev.some(m => m.id === payload.new.id)) return prev;
+            return [...prev, newMessageWithProfile];
+          });
           setTimeout(scrollToBottom, 100);
         })
         .subscribe();
@@ -184,14 +213,41 @@ export const ChatInterno = () => {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim() || !selectedChannel || !profile) return;
+    
+    const content = inputMessage.trim();
+    const tempId = crypto.randomUUID();
+    
+    // Inyección optimista
+    const tempMsg: Message = {
+      id: tempId,
+      channel_id: selectedChannel.id,
+      user_id: profile.id,
+      content: content,
+      created_at: new Date().toISOString(),
+      profiles: profile as any
+    };
+    
+    setMessages(prev => [...prev, tempMsg]);
+    setInputMessage("");
+    setTimeout(scrollToBottom, 50);
+
     try {
-      const { error } = await supabase.from("messages").insert({
+      const { data, error } = await supabase.from("messages").insert({
         channel_id: selectedChannel.id,
         user_id: profile.id,
-        content: inputMessage,
-      });
-      if (!error) setInputMessage("");
-    } catch (err) { console.error(err); }
+        content: content,
+      }).select().single();
+      
+      if (error) {
+        console.error(error);
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+      } else {
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: data.id } : m));
+      }
+    } catch (err) { 
+      console.error(err);
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+    }
   };
 
   // ✅ Etiquetar canal con icono de acceso
@@ -241,7 +297,28 @@ export const ChatInterno = () => {
               <option value="ventas">Acceso: Solo Agentes</option>
               <option value="soporte">Acceso: Solo Supervisores</option>
               <option value="alertas">Acceso: Solo Líderes (Admin/Managers)</option>
+              <option value="privado">Acceso: Privado (Elegir personal)</option>
             </select>
+            
+            {newChannelType === "privado" && (
+              <div className="max-h-32 overflow-y-auto bg-[#050814] border border-[rgba(212,175,55,0.2)] rounded p-2 text-xs">
+                {allUsers.map(user => (
+                  <label key={user.id} className="flex items-center gap-2 mb-1 cursor-pointer hover:bg-[rgba(212,175,55,0.1)] p-1 rounded">
+                    <input 
+                      type="checkbox" 
+                      checked={newChannelMembers.includes(user.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) setNewChannelMembers([...newChannelMembers, user.id]);
+                        else setNewChannelMembers(newChannelMembers.filter(id => id !== user.id));
+                      }}
+                      className="accent-[#D4AF37]"
+                    />
+                    <span className="text-[#94A3B8]">{user.first_name} {user.last_name} ({user.email})</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <button
                 type="submit"
@@ -252,7 +329,7 @@ export const ChatInterno = () => {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowCreateChannel(false); setNewChannelName(""); }}
+                onClick={() => { setShowCreateChannel(false); setNewChannelName(""); setNewChannelMembers([]); }}
                 className="px-2 py-1.5 text-[10px] text-[#64748B] hover:text-white rounded hover:bg-[rgba(255,255,255,0.05)]"
               >
                 <X className="h-3 w-3" />

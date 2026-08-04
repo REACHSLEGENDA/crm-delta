@@ -63,7 +63,9 @@ export const ProspectosList = () => {
       setLoading(true);
       let query = supabase.from("leads").select("*").order("created_at", { ascending: false });
 
-      if (isAgent && profile?.id) {
+      if (isSuperAdmin) {
+        // Superadmins see all leads
+      } else if (isAgent && profile?.id) {
         query = query.eq("agent_id", profile.id);
       } else if (profile?.team_id && !isAgent) {
         query = query.eq("team_id", profile.team_id);
@@ -84,8 +86,7 @@ export const ProspectosList = () => {
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("*")
-        .in("role", ["AGENT", "MANAGER"]);
+        .select("*");
       if (!error && data) {
         setAgents(data as Profile[]);
       }
