@@ -15,7 +15,7 @@ const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100, 200, 500, 1000, 3000];
 
 export const ProspectosList = () => {
   const { profile } = useAuth();
-  const { isSuperAdmin, isManager, isAgent, canDelete, isRetention, isCompliance } = usePermissions();
+  const { isSuperAdmin, isManager, isAgent, canDelete, isRetention, isCompliance, canViewAll } = usePermissions();
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [agents, setAgents] = useState<Profile[]>([]);
@@ -63,8 +63,8 @@ export const ProspectosList = () => {
       setLoading(true);
       let query = supabase.from("leads").select("*").order("created_at", { ascending: false });
 
-      if (isSuperAdmin) {
-        // Superadmins see all leads
+      if (canViewAll) {
+        // Managers y Superadmins ven todos los leads
       } else if (isAgent && profile?.id) {
         query = query.eq("agent_id", profile.id);
       } else if (profile?.team_id && !isAgent) {
