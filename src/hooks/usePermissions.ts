@@ -32,11 +32,11 @@ export const usePermissions = () => {
     // Solo ADMIN puede eliminar registros
     canDelete: isSuperAdmin,
 
-    // Exportar datos — solo ADMIN (Gerente puede importar pero NO exportar)
+    // Exportar datos — solo ADMIN
     canExport: isSuperAdmin,
 
-    // Importar datos — ADMIN + GERENTE
-    canImport: isSuperAdmin || isManager,
+    // Importar datos — solo ADMIN
+    canImport: isSuperAdmin,
 
     // Asignar leads a agentes — ADMIN + GERENTE + SUPERVISOR
     canAssignLeads: isSuperAdmin || isManager || isSupervisor,

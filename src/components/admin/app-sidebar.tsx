@@ -103,7 +103,7 @@ export function AppSidebar() {
     { label: "Revisión Total",  path: "/cumplimiento",  icon: ShieldCheck,     visible: isSuperAdmin || isCompliance },
     { label: "Contact Center",  path: "/contact-center",icon: PhoneCall,       visible: true },
     { label: "Chat Interno",    path: "/chat",          icon: MessageSquare,   visible: true },
-    { label: "Importar / Exportar", path: "/import-export", icon: ArrowUpDown, visible: isSuperAdmin || isManager },
+    { label: "Importar / Exportar", path: "/import-export", icon: ArrowUpDown, visible: isSuperAdmin },
     { label: "Admin",           path: "/admin",         icon: ShieldAlert,     visible: isSuperAdmin },
   ];
 
