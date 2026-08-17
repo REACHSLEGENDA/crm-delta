@@ -66,6 +66,7 @@ const HEADER_MAP: Record<string, TargetField> = {
   'campaña':       'campaign_name',
   'campaign':      'campaign_name',
   'campana':       'campaign_name',
+  'campña':        'campaign_name',
   'web':           'source',
   'fuente':        'source',
   'source':        'source',
@@ -77,6 +78,7 @@ const HEADER_MAP: Record<string, TargetField> = {
   'fecha_registro':'registered_at',
   'fecharegistro': 'registered_at',
   'registration date': 'registered_at',
+  'fecha registrc': 'registered_at',
 };
 
 export const TARGET_LABELS: Record<TargetField, string> = {
