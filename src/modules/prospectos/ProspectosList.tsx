@@ -6,7 +6,7 @@ import type { Lead, Profile, Note, Activity } from "@/types";
 import {
   Search, Plus, Tag, Trash2,
   Edit3, X, Phone, Mail, CheckCircle2, Globe, TrendingUp, MessageSquare,
-  ChevronLeft, ChevronRight, Users
+  ChevronLeft, ChevronRight, Users, Calendar, Megaphone
 } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { ComplianceDocs } from "./ComplianceDocs";
@@ -663,6 +663,20 @@ export const ProspectosList = () => {
                 <div className="flex items-center gap-3 text-[#94A3B8]">
                   <CheckCircle2 className="h-4 w-4 text-[#D4AF37]" />
                   <span>Estado: {selectedLead.status}</span>
+                </div>
+                {selectedLead.campaign_name && (
+                  <div className="flex items-center gap-3 text-[#94A3B8]">
+                    <Megaphone className="h-4 w-4 text-[#D4AF37]" />
+                    <span>Campaña: {selectedLead.campaign_name}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-3 text-[#94A3B8]">
+                  <Calendar className="h-4 w-4 text-[#D4AF37]" />
+                  <span>
+                    Registro: {selectedLead.registered_at 
+                      ? new Date(selectedLead.registered_at).toLocaleDateString('es-MX') 
+                      : new Date(selectedLead.created_at).toLocaleDateString('es-MX')}
+                  </span>
                 </div>
                 {selectedLead.comments && (
                   <div className="flex items-start gap-3 text-[#94A3B8] mt-1">
