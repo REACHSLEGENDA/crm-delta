@@ -211,6 +211,8 @@ export function normalizeImportedLead(
     // Phone needs special handling
     if (target === 'phone') {
       vals.phone = rawPhoneToString(rawVal);
+    } else if (rawVal instanceof Date) {
+      vals[target] = rawVal.toISOString();
     } else {
       vals[target] = rawVal !== null && rawVal !== undefined ? String(rawVal).trim() : '';
     }
@@ -291,7 +293,7 @@ export async function parseExcelFile(file: File): Promise<ParsedFile> {
     reader.onload = (e) => {
       try {
         const data = e.target?.result;
-        const wb = XLSX.read(data, { type: 'array', raw: true, cellDates: false });
+        const wb = XLSX.read(data, { type: 'array', raw: true, cellDates: true });
         const sheetName = wb.SheetNames[0];
         const ws = wb.Sheets[sheetName];
 
