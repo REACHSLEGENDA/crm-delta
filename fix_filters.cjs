@@ -1,0 +1,1 @@
+const fs = require('fs'); let c = fs.readFileSync('src/modules/prospectos/ProspectosList.tsx', 'utf8'); c = c.replace('setFilterCountry(e.target.value)', 'setFilterCountry(e.target.value); setCurrentPage(1)'); c = c.replace('setFilterSource(e.target.value)', 'setFilterSource(e.target.value); setCurrentPage(1)'); fs.writeFileSync('src/modules/prospectos/ProspectosList.tsx', c);

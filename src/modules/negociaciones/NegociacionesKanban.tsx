@@ -7,7 +7,7 @@ import { Plus, User, DollarSign, X, TrendingUp, XCircle, Trash2 } from "lucide-r
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 const STAGES = [
-  "Nuevo lead","Contactado","Interesado","Asesoría","Depósito pendiente","Ganado","Perdido",
+  "Nuevo lead","Contactado","Interesado","Asesor�a","Dep�sito pendiente","Ganado","Perdido",
 ] as const;
 type Stage = (typeof STAGES)[number];
 
@@ -17,8 +17,8 @@ const STAGE_CONFIG: Record<Stage, StageConfig> = {
   "Nuevo lead":       { color:"#64748B", bg:"rgba(100,116,139,0.08)", border:"rgba(100,116,139,0.35)", badge:"bg-[rgba(100,116,139,0.18)] text-[#94A3B8]", label:"text-[#94A3B8]", emoji:"○" },
   Contactado:         { color:"#00C9FF", bg:"rgba(0,201,255,0.06)",   border:"rgba(0,201,255,0.35)",   badge:"bg-[rgba(0,201,255,0.15)] text-[#00C9FF]",   label:"text-[#00C9FF]",  emoji:"◎" },
   Interesado:         { color:"#F59E0B", bg:"rgba(245,158,11,0.06)",  border:"rgba(245,158,11,0.35)",  badge:"bg-[rgba(245,158,11,0.15)] text-[#F59E0B]",  label:"text-[#F59E0B]",  emoji:"◐" },
-  Asesoría:           { color:"#F97316", bg:"rgba(249,115,22,0.06)",  border:"rgba(249,115,22,0.35)",  badge:"bg-[rgba(249,115,22,0.15)] text-[#F97316]",  label:"text-[#F97316]",  emoji:"◑" },
-  "Depósito pendiente":{ color:"#A78BFA", bg:"rgba(167,139,250,0.06)", border:"rgba(167,139,250,0.35)", badge:"bg-[rgba(167,139,250,0.15)] text-[#A78BFA]", label:"text-[#A78BFA]", emoji:"●" },
+  Asesor�a:           { color:"#F97316", bg:"rgba(249,115,22,0.06)",  border:"rgba(249,115,22,0.35)",  badge:"bg-[rgba(249,115,22,0.15)] text-[#F97316]",  label:"text-[#F97316]",  emoji:"◑" },
+  "Dep�sito pendiente":{ color:"#A78BFA", bg:"rgba(167,139,250,0.06)", border:"rgba(167,139,250,0.35)", badge:"bg-[rgba(167,139,250,0.15)] text-[#A78BFA]", label:"text-[#A78BFA]", emoji:"●" },
   Ganado:             { color:"#22C55E", bg:"rgba(34,197,94,0.07)",   border:"rgba(34,197,94,0.35)",   badge:"bg-[rgba(34,197,94,0.15)] text-[#22C55E]",   label:"text-[#22C55E]",  emoji:"✓" },
   Perdido:            { color:"#EF4444", bg:"rgba(239,68,68,0.05)",   border:"rgba(239,68,68,0.25)",   badge:"bg-[rgba(239,68,68,0.12)] text-[#EF4444]",   label:"text-[#EF4444]",  emoji:"✕" },
 };

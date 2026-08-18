@@ -1,0 +1,1 @@
+const fs = require('fs'); let c = fs.readFileSync('src/modules/prospectos/ProspectosList.tsx', 'utf8'); c = c.replace(/Asesor.a/g, 'Asesoría').replace(/Dep.sito pendiente/g, 'Depósito pendiente'); fs.writeFileSync('src/modules/prospectos/ProspectosList.tsx', c);
