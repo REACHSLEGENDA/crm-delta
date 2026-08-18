@@ -368,7 +368,7 @@ export const ProspectosList = () => {
         <div>
           <select 
             value={filterCountry}
-            onChange={(e) => setFilterCountry(e.target.value); setCurrentPage(1)}
+            onChange={(e) => { setFilterCountry(e.target.value); setCurrentPage(1); }}
             className="px-3 py-2 w-full text-sm bg-[#0D1428] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
           >
             <option value="">-- Todos los Países --</option>
@@ -380,7 +380,7 @@ export const ProspectosList = () => {
         <div>
           <select 
             value={filterSource}
-            onChange={(e) => setFilterSource(e.target.value); setCurrentPage(1)}
+            onChange={(e) => { setFilterSource(e.target.value); setCurrentPage(1); }}
             className="px-3 py-2 w-full text-sm bg-[#0D1428] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
           >
             <option value="">-- Todas las Fuentes --</option>
