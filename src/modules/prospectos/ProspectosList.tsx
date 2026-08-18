@@ -389,8 +389,8 @@ export const ProspectosList = () => {
             <option value="Nuevo">Nuevo</option>
             <option value="Contactado">Contactado</option>
             <option value="Interesado">Interesado</option>
-            <option value="Asesor�a">Asesor�a</option>
-            <option value="Dep�sito pendiente">Dep�sito pendiente</option>
+            <option value="Asesoría">Asesoría</option>
+            <option value="Depósito pendiente">Depósito pendiente</option>
             <option value="Ganado">Ganado</option>
             <option value="Perdido">Perdido</option>
           </select>
@@ -416,7 +416,7 @@ export const ProspectosList = () => {
             <option value="">-- Todas las Fuentes --</option>
             <option value="Web">Web</option>
             <option value="Recomendado">Recomendado</option>
-            <option value="Campa�a">Campa�a</option>
+            <option value="Campaña">Campaña</option>
             <option value="Cold Call">Cold Call</option>
           </select>
         </div>
@@ -550,7 +550,7 @@ export const ProspectosList = () => {
                   </th>
                   <th className="p-4">Nombre</th>
                   <th className="p-4">Email</th>
-                  <th className="p-4">Tel�fono</th>
+                  <th className="p-4">Teléfono</th>
                   <th className="p-4">Fuente</th>
                   <th className="p-4">Agente</th>
                   <th className="p-4">Estado</th>
@@ -707,7 +707,7 @@ export const ProspectosList = () => {
                 {selectedLead.campaign_name && (
                   <div className="flex items-center gap-3 text-[#94A3B8]">
                     <Megaphone className="h-4 w-4 text-[#D4AF37]" />
-                    <span>Campa�a: {selectedLead.campaign_name}</span>
+                    <span>Campaña: {selectedLead.campaign_name}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-3 text-[#94A3B8]">
@@ -836,7 +836,7 @@ export const ProspectosList = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs text-[#94A3B8] mb-1">Tel�fono</label>
+                <label className="block text-xs text-[#94A3B8] mb-1">Teléfono</label>
                 <input
                   type="text"
                   disabled={isRetention || isCompliance}
@@ -893,8 +893,8 @@ export const ProspectosList = () => {
                       <option value="Nuevo">Nuevo</option>
                       <option value="Contactado">Contactado</option>
                       <option value="Interesado">Interesado</option>
-                      <option value="Asesor�a">Asesor�a</option>
-                      <option value="Dep�sito pendiente">Dep�sito pendiente</option>
+                      <option value="Asesoría">Asesoría</option>
+                      <option value="Depósito pendiente">Depósito pendiente</option>
                       <option value="Ganado">Ganado</option>
                       <option value="Perdido">Perdido</option>
                     </>
@@ -923,7 +923,7 @@ export const ProspectosList = () => {
                 >
                   <option value="Web">Web</option>
                   <option value="Recomendado">Recomendado</option>
-                  <option value="Campa�a">Campa�a</option>
+                  <option value="Campaña">Campaña</option>
                   <option value="Cold Call">Cold Call</option>
                 </select>
               </div>
