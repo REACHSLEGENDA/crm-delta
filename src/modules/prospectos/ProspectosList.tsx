@@ -62,7 +62,8 @@ export const ProspectosList = () => {
   const fetchLeads = async () => {
     try {
       setLoading(true);
-      let query = supabase.from("leads").select("*").order("created_at", { ascending: false });
+      // Límite de 3000 para evitar que el payload rompa la app en vista general
+      let query = supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(3000);
 
       if (canViewAll) {
         // Managers y Superadmins ven todos los leads
@@ -75,6 +76,8 @@ export const ProspectosList = () => {
       const { data, error } = await query;
       if (!error && data) {
         setLeads(data as Lead[]);
+      } else if (error) {
+        console.error("Error al obtener leads (db):", error);
       }
     } catch (err) {
       console.error("Error fetching leads:", err);

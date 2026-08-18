@@ -36,8 +36,8 @@ export const NegociacionesKanban = () => {
   const fetchDealsAndLeads = useCallback(async () => {
     try {
       setLoading(true);
-      let dealsQuery = supabase.from("deals").select("*");
-      let leadsQuery = supabase.from("leads").select("*");
+      let dealsQuery = supabase.from("deals").select("*").limit(3000);
+      let leadsQuery = supabase.from("leads").select("*").limit(3000);
 
       if (isAgent && profile?.id) {
         dealsQuery = dealsQuery.eq("agent_id", profile.id);

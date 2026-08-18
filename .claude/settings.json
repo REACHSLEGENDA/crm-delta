@@ -1,28 +1,17 @@
 {
-  "extraKnownMarketplaces": {},
-  "enabledPlugins": {
-    "context7@claude-plugins-official": false,
-    "playwright@claude-plugins-official": false,
-    "security-guidance@claude-plugins-official": false,
-    "supabase@claude-plugins-official": false,
-    "typescript-lsp@claude-plugins-official": true,
-    "code-review@claude-plugins-official": false,
-    "commit-commands@claude-plugins-official": false,
-    "frontend-design@claude-plugins-official": false,
-    "superpowers@claude-plugins-official": false,
-    "hookify@claude-plugins-official": false,
-    "ralph-loop@claude-plugins-official": false
-  },
   "skillListingMaxDescChars": 512,
   "env": {
     "ENABLE_LSP_TOOL": "1"
   },
-  "permissions": {
-    "allow": []
-  },
   "attribution": {
     "commit": "",
     "pr": ""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git check-ignore *)",
+      "Bash(git status *)"
+    ]
   },
   "hooks": {
     "PreToolUse": [
@@ -134,11 +123,33 @@
       }
     ]
   },
+  "enabledPlugins": {
+    "context7@claude-plugins-official": false,
+    "playwright@claude-plugins-official": false,
+    "security-guidance@claude-plugins-official": false,
+    "supabase@claude-plugins-official": false,
+    "typescript-lsp@claude-plugins-official": true,
+    "code-review@claude-plugins-official": false,
+    "commit-commands@claude-plugins-official": false,
+    "frontend-design@claude-plugins-official": false,
+    "superpowers@claude-plugins-official": false,
+    "hookify@claude-plugins-official": false,
+    "ralph-loop@claude-plugins-official": false
+  },
+  "extraKnownMarketplaces": {},
   "lspServers": {
     "typescript": {
       "command": "typescript-language-server",
-      "args": ["--stdio"],
-      "fileTypes": [".ts", ".tsx", ".mjs", ".js", ".jsx"]
+      "args": [
+        "--stdio"
+      ],
+      "fileTypes": [
+        ".ts",
+        ".tsx",
+        ".mjs",
+        ".js",
+        ".jsx"
+      ]
     }
   }
 }
