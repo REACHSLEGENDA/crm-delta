@@ -7,7 +7,7 @@ import { Plus, User, DollarSign, X, TrendingUp, XCircle, Trash2 } from "lucide-r
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 const STAGES = [
-  "Nuevo lead","Contactado","Interesado","Asesor�a","Dep�sito pendiente","Ganado","Perdido",
+  "Nuevo lead","Contactado","Interesado","Asesoría","Depósito pendiente","Ganado","Perdido",
 ] as const;
 type Stage = (typeof STAGES)[number];
 
