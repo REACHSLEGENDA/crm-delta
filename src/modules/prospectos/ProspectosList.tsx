@@ -495,7 +495,7 @@ export const ProspectosList = () => {
           </div>
         ) : filteredLeads.length === 0 ? (
           <div className="text-center p-12 text-[#94A3B8]">
-            No hay prospectos que coincidan con la b�squeda.
+            No hay prospectos que coincidan con la búsqueda.
           </div>
         ) : (
           <>
