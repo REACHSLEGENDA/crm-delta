@@ -113,7 +113,7 @@ export const ImportExportPage = () => {
           <div className="space-y-4">
             <p className="text-sm text-[#4A6080]">
               Sube un archivo <span className="text-[#D4AF37]">.xlsx</span> o <span className="text-[#D4AF37]">.csv</span> con los leads de tu campaña.
-              Soporta el formato estándar de Flow Markets (Nombre Lead, Email, PhoneNumber, Ciudad, Campaña, Web, Dirección, Fecha Registro).
+              Soporta el formato estándar de Flow Markets y una columna opcional <span className="text-[#D4AF37]">Depósito</span> o <span className="text-[#D4AF37]">Monto depósito</span> para crear negociaciones con importe.
             </p>
             <FileDropzone
               onFileAccepted={imp.handleFileAccepted}
@@ -276,6 +276,8 @@ export const ImportExportPage = () => {
                 <span className="text-[#D4AF37] font-mono">{imp.stats?.duplicates} ({imp.options.duplicateAction === 'skip' ? 'omitir' : imp.options.duplicateAction})</span>
                 <span>Errores:</span>
                 <span className="text-red-400 font-mono">{imp.stats?.errors} (se omiten)</span>
+                <span>Con depósito:</span>
+                <span className="text-[#D4AF37] font-mono">{imp.rows.filter((row) => (row.deposit_amount ?? 0) > 0).length} negociaciones</span>
                 <span>Asignación:</span>
                 <span className="text-[#F8FAFC]">{
                   imp.options.assignmentMode === 'none' ? 'Sin asignar' :

@@ -283,7 +283,7 @@ export const Dashboard = () => {
                   <YAxis stroke="#334155" tick={{ fill: "#4A6080", fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip
                     contentStyle={{ backgroundColor: "rgba(8,15,32,0.95)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: "0.625rem", color: "#F8FAFC" }}
-                    formatter={(val: number) => [`$${val.toLocaleString("es-MX")}`, "Capital"]}
+                    formatter={(val) => [`$${Number(val ?? 0).toLocaleString("es-MX")}`, "Capital"]}
                   />
                   <Area type="monotone" dataKey="revenue" stroke="#D4AF37" fillOpacity={1} fill="url(#colorRevenue)" strokeWidth={1.5} dot={false} activeDot={{ r: 4, fill: "#D4AF37" }} />
                 </AreaChart>
@@ -311,7 +311,7 @@ export const Dashboard = () => {
                   <YAxis stroke="#334155" tick={{ fill: "#4A6080", fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip
                     contentStyle={{ backgroundColor: "rgba(8,15,32,0.95)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: "0.625rem", color: "#F8FAFC" }}
-                    formatter={(val: number) => [val, "Negocios"]}
+                    formatter={(val) => [Number(val ?? 0), "Negocios"]}
                   />
                   <Bar dataKey="count" fill="#00C9FF" radius={[4, 4, 0, 0]} fillOpacity={0.85} />
                 </BarChart>

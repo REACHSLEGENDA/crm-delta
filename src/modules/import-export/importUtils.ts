@@ -18,6 +18,7 @@ export interface ImportRow {
   campaign_asset: string;
   source: string;
   interest_intent: string;
+  deposit_amount: number | null;
   registered_at: string | null;
   _raw: Record<string, unknown>;
 }
@@ -30,6 +31,7 @@ export type TargetField =
   | 'campaign_name'
   | 'source'
   | 'interest_intent'
+  | 'deposit_amount'
   | 'registered_at'
   | '__skip__';
 
@@ -74,6 +76,16 @@ const HEADER_MAP: Record<string, TargetField> = {
   'dirección':     'interest_intent',
   'intention':     'interest_intent',
   'intención':     'interest_intent',
+  'deposito':      'deposit_amount',
+  'depósito':      'deposit_amount',
+  'monto deposito':'deposit_amount',
+  'monto depósito':'deposit_amount',
+  'cantidad deposito': 'deposit_amount',
+  'cantidad depósito': 'deposit_amount',
+  'deposit amount':'deposit_amount',
+  'deposit':       'deposit_amount',
+  'amount':        'deposit_amount',
+  'valor':         'deposit_amount',
   'fecha registro':'registered_at',
   'fecha_registro':'registered_at',
   'fecharegistro': 'registered_at',
@@ -89,6 +101,7 @@ export const TARGET_LABELS: Record<TargetField, string> = {
   campaign_name:   'Campaña',
   source:          'Fuente (Web)',
   interest_intent: 'Intención',
+  deposit_amount:  'Depósito (USD)',
   registered_at:   'Fecha de Registro',
   __skip__:        'No importar',
 };
@@ -195,6 +208,30 @@ function rawPhoneToString(val: unknown): string {
   return str;
 }
 
+export function parseDepositAmount(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (typeof raw === 'number') return Number.isFinite(raw) && raw > 0 ? raw : null;
+
+  let value = String(raw).trim().replace(/[^\d.,-]/g, '');
+  if (!value) return null;
+
+  const lastComma = value.lastIndexOf(',');
+  const lastDot = value.lastIndexOf('.');
+  if (lastComma >= 0 && lastDot >= 0) {
+    value = lastComma > lastDot
+      ? value.replace(/\./g, '').replace(',', '.')
+      : value.replace(/,/g, '');
+  } else if (lastComma >= 0) {
+    value = /,\d{1,2}$/.test(value) ? value.replace(',', '.') : value.replace(/,/g, '');
+  } else if (lastDot >= 0) {
+    const dotCount = (value.match(/\./g) ?? []).length;
+    if (dotCount > 1 || /\.\d{3}$/.test(value)) value = value.replace(/\./g, '');
+  }
+
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
 // ─── Row normalizer ──────────────────────────────────────────────────────────
 
 export function normalizeImportedLead(
@@ -253,7 +290,14 @@ export function normalizeImportedLead(
   // 6. Intent
   const interest_intent = vals.interest_intent ? normalizeIntent(vals.interest_intent) : '';
 
-  // 7. Date
+  // 7. Deposit amount
+  const rawDeposit = vals.deposit_amount ?? '';
+  const deposit_amount = parseDepositAmount(rawDeposit);
+  if (rawDeposit && deposit_amount === null) {
+    warnings.push('Depósito inválido o en cero — se podrá capturar manualmente');
+  }
+
+  // 8. Date
   let registered_at: string | null = null;
   const rawDate = vals.registered_at ?? '';
   if (rawDate) {
@@ -282,6 +326,7 @@ export function normalizeImportedLead(
     campaign_asset,
     source,
     interest_intent,
+    deposit_amount,
     registered_at,
     _raw: row,
   };

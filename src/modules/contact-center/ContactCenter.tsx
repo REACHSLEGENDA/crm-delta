@@ -24,7 +24,6 @@ export const ContactCenter = () => {
   // Búsqueda para agregar a cola
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
 
   const handleSearchLeads = async (query: string) => {
     setSearchQuery(query);
@@ -32,7 +31,6 @@ export const ContactCenter = () => {
       setSearchResults([]);
       return;
     }
-    setIsSearching(true);
     try {
       let q = supabase.from("leads").select("id, first_name, last_name, phone, in_call_queue");
       if (isAgent) {
@@ -43,7 +41,7 @@ export const ContactCenter = () => {
     } catch (err) {
       console.error(err);
     } finally {
-      setIsSearching(false);
+      // Search results are cleared or replaced by the query above.
     }
   };
 

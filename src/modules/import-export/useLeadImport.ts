@@ -246,20 +246,39 @@ export function useLeadImport() {
             team_id:        profile.team_id ?? null,
             created_by:     profile.id,
             import_batch_id: batchId,
-            raw_data:       row._raw,
+            raw_data: {
+              ...row._raw,
+              _crm_deposit_amount: row.deposit_amount,
+              _crm_import_row: row._rowIndex,
+            },
           };
         });
 
         // Push promise to array to execute them concurrently
         insertPromises.push(
-          supabase.from('leads').insert(payload).then(({ error }) => ({ chunk, error }))
+          supabase
+            .from('leads')
+            .insert(payload)
+            .select('id, first_name, last_name, agent_id, team_id, raw_data')
+            .then(({ data, error }) => ({ chunk, data, error }))
         );
       }
 
       // Wait for all inserts to complete concurrently
       const insertResults = await Promise.all(insertPromises);
       
-      for (const { chunk, error: insertErr } of insertResults) {
+      const dealsToCreate: Array<{
+        name: string;
+        value: number;
+        stage: string;
+        lead_id: string;
+        agent_id: string | null;
+        team_id: string | null;
+        rowNumber: number;
+        rawData: Record<string, unknown>;
+      }> = [];
+
+      for (const { chunk, data, error: insertErr } of insertResults) {
         if (insertErr) {
           chunk.forEach((row) => {
             errorRows.push({
@@ -272,6 +291,40 @@ export function useLeadImport() {
           });
         } else {
           importedCount += chunk.length;
+          for (const lead of data ?? []) {
+            const rawData = (lead.raw_data ?? {}) as Record<string, unknown>;
+            const depositAmount = Number(rawData._crm_deposit_amount ?? 0);
+            if (!Number.isFinite(depositAmount) || depositAmount <= 0) continue;
+
+            dealsToCreate.push({
+              name: `${lead.first_name} ${lead.last_name}`.trim(),
+              value: depositAmount,
+              stage: options.status === 'Nuevo' ? 'Nuevo lead' : options.status,
+              lead_id: lead.id,
+              agent_id: lead.agent_id,
+              team_id: lead.team_id,
+              rowNumber: Number(rawData._crm_import_row ?? 0),
+              rawData,
+            });
+          }
+        }
+      }
+
+      // Rows with a mapped deposit become valued deals automatically.
+      for (let i = 0; i < dealsToCreate.length; i += CHUNK) {
+        const dealChunk = dealsToCreate.slice(i, i + CHUNK);
+        const dealPayload = dealChunk.map(({ rowNumber: _rowNumber, rawData: _rawData, ...deal }) => deal);
+        const { error: dealsError } = await supabase.from('deals').insert(dealPayload);
+        if (dealsError) {
+          dealChunk.forEach((deal) => {
+            errorRows.push({
+              batch_id: batchId,
+              row_number: deal.rowNumber,
+              error_type: 'deal_insert_error',
+              message: `El prospecto se importó, pero no se creó su negociación: ${dealsError.message}`,
+              raw_data: deal.rawData,
+            });
+          });
         }
       }
 

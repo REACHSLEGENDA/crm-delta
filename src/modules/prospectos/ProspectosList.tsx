@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useDeferredValue, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -11,7 +11,7 @@ import {
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { ComplianceDocs } from "./ComplianceDocs";
 
-const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100, 200, 500, 1000, 3000];
+const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 500, 1000];
 
 export const ProspectosList = () => {
   const { profile } = useAuth();
@@ -20,6 +20,8 @@ export const ProspectosList = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [agents, setAgents] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [totalLeadCount, setTotalLeadCount] = useState(0);
   
   // Filters state
   const [search, setSearch] = useState("");
@@ -27,6 +29,7 @@ export const ProspectosList = () => {
   const [filterSource, setFilterSource] = useState("");
   const [filterAgent, setFilterAgent] = useState("");
   const [filterCountry, setFilterCountry] = useState("");
+  const deferredSearch = useDeferredValue(search.trim());
 
   // ✅ NUEVO: Paginación
   const [pageSize, setPageSize] = useState(20);
@@ -59,11 +62,16 @@ export const ProspectosList = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [newNote, setNewNote] = useState("");
 
-  const fetchLeads = async () => {
+  const fetchLeads = useCallback(async () => {
+    if (!profile) return;
+
     try {
       setLoading(true);
-      // Límite de 3000 para evitar que el payload rompa la app en vista general
-      let query = supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(3000);
+      setLoadError("");
+      let query = supabase
+        .from("leads")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false });
 
       if (canViewAll) {
         // Managers y Superadmins ven todos los leads
@@ -73,18 +81,52 @@ export const ProspectosList = () => {
         query = query.eq("team_id", profile.team_id);
       }
 
-      const { data, error } = await query;
+      if (filterStatus) query = query.eq("status", filterStatus);
+      if (filterAgent === "__unassigned__") {
+        query = query.is("agent_id", null);
+      } else if (filterAgent) {
+        query = query.eq("agent_id", filterAgent);
+      }
+      if (filterSource) query = query.eq("source", filterSource);
+      if (filterCountry) query = query.eq("country", filterCountry);
+
+      const searchTerm = deferredSearch.replace(/[,%()]/g, " ").trim();
+      if (searchTerm) {
+        query = query.or(
+          `first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`,
+        );
+      }
+
+      const from = (currentPage - 1) * pageSize;
+      query = query.range(from, from + pageSize - 1);
+
+      const { data, error, count } = await query;
       if (!error && data) {
         setLeads(data as Lead[]);
+        setTotalLeadCount(count ?? data.length);
       } else if (error) {
         console.error("Error al obtener leads (db):", error);
+        setLeads([]);
+        setTotalLeadCount(0);
+        setLoadError("No se pudieron cargar los prospectos con los filtros seleccionados.");
       }
     } catch (err) {
       console.error("Error fetching leads:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    canViewAll,
+    currentPage,
+    deferredSearch,
+    filterAgent,
+    filterCountry,
+    filterSource,
+    filterStatus,
+    isAgent,
+    pageSize,
+    profile,
+  ]);
 
   const fetchAgents = async () => {
     try {
@@ -100,10 +142,11 @@ export const ProspectosList = () => {
   };
 
   useEffect(() => {
-    if (profile) {
-      fetchLeads();
-      fetchAgents();
-    }
+    fetchLeads();
+  }, [fetchLeads]);
+
+  useEffect(() => {
+    if (profile) fetchAgents();
   }, [profile]);
 
   // Handle drawer load detail
@@ -248,27 +291,14 @@ export const ProspectosList = () => {
     setConfirmModal({ isOpen: true, targetId: leadId, targetName: name });
   };
 
-  const filteredLeads = leads.filter(lead => {
-    const term = search.toLowerCase();
-    const fullName = `${lead.first_name} ${lead.last_name}`.toLowerCase();
-    const matchesSearch = fullName.includes(term) || 
-                          (lead.email && lead.email.toLowerCase().includes(term)) ||
-                          (lead.phone && lead.phone.includes(term)) ||
-                          (lead.id && lead.id.toLowerCase().includes(term));
-    const matchesStatus = filterStatus ? lead.status === filterStatus : true;
-    const matchesSource = filterSource ? lead.source === filterSource : true;
-    const matchesAgent = filterAgent ? lead.agent_id === filterAgent : true;
-    const matchesCountry = filterCountry ? lead.country === filterCountry : true;
-
-    return matchesSearch && matchesStatus && matchesSource && matchesAgent && matchesCountry;
-  });
-
   // Unique countries for the filter dropdown
-  const uniqueCountries = Array.from(new Set(leads.map(l => l.country).filter(Boolean))).sort();
+  const uniqueCountries = Array.from(
+    new Set(leads.map((lead) => lead.country).filter((country): country is string => Boolean(country))),
+  ).sort();
 
-  // ✅ Paginación
-  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
-  const paginatedLeads = filteredLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  // ✅ Paginación respaldada por Supabase (incluye toda la base, no solo los primeros registros)
+  const totalPages = Math.max(1, Math.ceil(totalLeadCount / pageSize));
+  const paginatedLeads = leads;
 
   // ✅ Helpers de selección múltiple
   const toggleSelect = (id: string) => {
@@ -345,7 +375,7 @@ export const ProspectosList = () => {
             type="text" 
             placeholder="Buscar por nombre, email o teléfono..." 
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
             className="pl-9 pr-4 py-2 w-full text-sm bg-[#0D1428] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37]"
           />
         </div>
@@ -397,6 +427,7 @@ export const ProspectosList = () => {
             className="px-3 py-2 w-full text-sm bg-[#0D1428] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
           >
             <option value="">-- Todos los Agentes --</option>
+            <option value="__unassigned__">Sin asignar</option>
             {agents.map(a => (
               <option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>
             ))}
@@ -409,6 +440,8 @@ export const ProspectosList = () => {
             setFilterCountry("");
             setFilterSource("");
             setFilterAgent("");
+            setCurrentPage(1);
+            setSelectedIds(new Set());
           }}
           className="gold-button-secondary py-2 text-sm rounded font-medium"
         >
@@ -493,7 +526,11 @@ export const ProspectosList = () => {
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#D4AF37] mx-auto mb-2"></div>
             Cargando base de prospectos...
           </div>
-        ) : filteredLeads.length === 0 ? (
+        ) : loadError ? (
+          <div className="text-center p-12 text-red-400">
+            {loadError}
+          </div>
+        ) : totalLeadCount === 0 ? (
           <div className="text-center p-12 text-[#94A3B8]">
             No hay prospectos que coincidan con la búsqueda.
           </div>
@@ -593,7 +630,7 @@ export const ProspectosList = () => {
                 >
                   {PAGE_SIZE_OPTIONS.map(s => (<option key={s} value={s}>{s}</option>))}
                 </select>
-                <span className="text-[11px] text-[#4A6080]">de {filteredLeads.length} registros</span>
+                <span className="text-[11px] text-[#4A6080]">de {totalLeadCount} registros</span>
               </div>
 
               <div className="flex items-center gap-1">

@@ -3,7 +3,7 @@ export type Department = 'Ventas' | 'Retencion' | 'Cumplimiento';
 export type LeadStatus = 'Nuevo' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido' | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
 export type DealStage = 'Nuevo lead' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido' | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
 export type CallDisposition = 'Interesado' | 'No interesado' | 'Buzón' | 'Callback' | 'Depósito confirmado';
-export type ChannelType = 'general' | 'ventas' | 'soporte' | 'alertas';
+export type ChannelType = 'general' | 'ventas' | 'soporte' | 'alertas' | 'privado';
 export type RuleStatus = 'active' | 'inactive';
 
 export interface Profile {
@@ -124,6 +124,8 @@ export interface Call {
   disposition: CallDisposition;
   notes?: string;
   created_at: string;
+  leads?: Pick<Lead, 'first_name' | 'last_name'> | null;
+  profiles?: Pick<Profile, 'first_name' | 'last_name'> | null;
 }
 
 export interface Note {
@@ -150,6 +152,7 @@ export interface Channel {
   id: string;
   name: string;
   type: ChannelType;
+  members?: string[] | null;
   created_at: string;
 }
 

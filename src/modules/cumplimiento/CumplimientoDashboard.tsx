@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { ShieldCheck, Search, Eye, FileText, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { ShieldCheck, Search, FileText, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import type { Lead, ComplianceDocument } from "@/types";
 
 const REQUIRED_DOCS = [

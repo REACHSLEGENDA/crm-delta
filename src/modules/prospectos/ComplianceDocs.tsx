@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import type { ComplianceDocument } from "@/types";
-import { FileText, UploadCloud, Trash2, Eye, Download, ShieldCheck, Folder } from "lucide-react";
+import { FileText, UploadCloud, Trash2, Eye, ShieldCheck, Folder } from "lucide-react";
 
 interface ComplianceDocsProps {
   leadId: string;
@@ -18,12 +18,10 @@ const REQUIRED_DOCS = [
 export const ComplianceDocs = ({ leadId }: ComplianceDocsProps) => {
   const { profile } = useAuth();
   const [documents, setDocuments] = useState<ComplianceDocument[]>([]);
-  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
 
   const fetchDocuments = async () => {
     try {
-      setLoading(true);
       const { data, error } = await supabase
         .from("compliance_documents")
         .select("*")
@@ -35,7 +33,7 @@ export const ComplianceDocs = ({ leadId }: ComplianceDocsProps) => {
     } catch (err) {
       console.error("Error fetching docs:", err);
     } finally {
-      setLoading(false);
+      // The document list remains visible while it refreshes.
     }
   };
 

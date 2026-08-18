@@ -86,7 +86,7 @@ const NavItem = ({ item, onClick }: NavItemProps) => {
 
 export function AppSidebar() {
   const { profile, logout } = useAuth();
-  const { isSuperAdmin, isManager, isCompliance } = usePermissions();
+  const { isSuperAdmin, isCompliance } = usePermissions();
   const { openMobile, setOpenMobile } = useSidebar();
 
   const handleClick = () => {

@@ -8,7 +8,7 @@ interface ColumnMapperProps {
 
 const TARGET_OPTIONS: TargetField[] = [
   'full_name', 'email', 'phone', 'country',
-  'campaign_name', 'source', 'interest_intent', 'registered_at', '__skip__',
+  'campaign_name', 'source', 'interest_intent', 'deposit_amount', 'registered_at', '__skip__',
 ];
 
 const REQUIRED: TargetField[] = ['full_name', 'email', 'phone'];

@@ -36,7 +36,7 @@ function leadsToRows(leads: Lead[]): Record<string, string>[] {
   return leads.map((lead) => {
     const row: Record<string, string> = {};
     for (const col of EXPORT_COLUMNS) {
-      const val = (lead as Record<string, unknown>)[col.key];
+      const val = (lead as unknown as Record<string, unknown>)[col.key];
       row[col.label] = val != null ? String(val) : '';
     }
     return row;

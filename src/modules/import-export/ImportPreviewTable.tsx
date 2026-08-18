@@ -34,13 +34,14 @@ export function ImportPreviewTable({ rows, filterStatus = 'all' }: ImportPreview
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const filterBtns: Array<{ key: RowStatus | 'all'; label: string; count: number }> = [
+  const allFilterBtns: Array<{ key: RowStatus | 'all'; label: string; count: number }> = [
     { key: 'all',       label: 'Todos',      count: rows.length },
     { key: 'valid',     label: 'Listos',     count: rows.filter((r) => r._status === 'valid').length },
     { key: 'warning',   label: 'Warnings',   count: rows.filter((r) => r._status === 'warning').length },
     { key: 'duplicate', label: 'Duplicados', count: rows.filter((r) => r._status === 'duplicate').length },
     { key: 'error',     label: 'Errores',    count: rows.filter((r) => r._status === 'error').length },
-  ].filter((b) => b.count > 0 || b.key === 'all');
+  ];
+  const filterBtns = allFilterBtns.filter((b) => b.count > 0 || b.key === 'all');
 
   return (
     <div className="space-y-3">
@@ -73,6 +74,7 @@ export function ImportPreviewTable({ rows, filterStatus = 'all' }: ImportPreview
               <th className="p-3 text-left">Teléfono</th>
               <th className="p-3 text-left">País</th>
               <th className="p-3 text-left">Activo</th>
+              <th className="p-3 text-left">Depósito</th>
               <th className="p-3 text-left">Fuente</th>
               <th className="p-3 text-left">Notas / Errores</th>
             </tr>
@@ -107,6 +109,11 @@ export function ImportPreviewTable({ rows, filterStatus = 'all' }: ImportPreview
                       {row.campaign_asset}
                     </span>
                   ) : <span className="text-[#334155]">—</span>}
+                </td>
+                <td className="p-3 text-[#D4AF37] font-mono-numbers">
+                  {row.deposit_amount
+                    ? `$${row.deposit_amount.toLocaleString('es-MX', { maximumFractionDigits: 2 })}`
+                    : <span className="text-[#334155]">Manual</span>}
                 </td>
                 <td className="p-3 text-[#94A3B8] max-w-[120px] truncate">
                   {row.source || <span className="text-[#334155]">—</span>}

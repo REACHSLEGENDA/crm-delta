@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { Deal, Lead } from "@/types";
-import { Plus, User, DollarSign, X, TrendingUp, XCircle, Trash2 } from "lucide-react";
+import type { Deal, Lead, LeadStatus } from "@/types";
+import { Plus, User, DollarSign, X, TrendingUp, XCircle, Trash2, Pencil } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 const STAGES = [
@@ -23,6 +23,16 @@ const STAGE_CONFIG: Record<Stage, StageConfig> = {
   Perdido:            { color:"#EF4444", bg:"rgba(239,68,68,0.05)",   border:"rgba(239,68,68,0.25)",   badge:"bg-[rgba(239,68,68,0.12)] text-[#EF4444]",   label:"text-[#EF4444]",  emoji:"✕" },
 };
 
+const STAGE_TO_LEAD_STATUS: Record<Stage, LeadStatus> = {
+  "Nuevo lead": "Nuevo",
+  Contactado: "Contactado",
+  Interesado: "Interesado",
+  Asesoría: "Asesoría",
+  "Depósito pendiente": "Depósito pendiente",
+  Ganado: "Ganado",
+  Perdido: "Perdido",
+};
+
 export const NegociacionesKanban = () => {
   const { profile } = useAuth();
   const { isAgent } = usePermissions();
@@ -31,7 +41,10 @@ export const NegociacionesKanban = () => {
   const [loading, setLoading] = useState(true);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [formData, setFormData] = useState({ name: "", value: 0, lead_id: "", stage: "Nuevo lead" });
+  const [editingDealId, setEditingDealId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [formData, setFormData] = useState({ name: "", value: "", lead_id: "", stage: "Nuevo lead" });
 
   const fetchDealsAndLeads = useCallback(async () => {
     try {
@@ -82,86 +95,186 @@ export const NegociacionesKanban = () => {
   };
 
   const handleDragStart = (e: React.DragEvent, dealId: string) => { e.dataTransfer.setData("text/plain", dealId); };
-  const handleDragOver = (e: React.DragEvent, stage: string) => { e.preventDefault(); setDragOverStage(stage); };
+  const handleDragOver = (e: React.DragEvent, stage: Stage) => { e.preventDefault(); setDragOverStage(stage); };
   const handleDragLeave = () => setDragOverStage(null);
 
-  const handleDrop = async (e: React.DragEvent, targetStage: string) => {
+  const handleDrop = async (e: React.DragEvent, targetStage: Stage) => {
     e.preventDefault();
     setDragOverStage(null);
     const dealId = e.dataTransfer.getData("text/plain");
     if (!dealId || !profile) return;
     const deal = deals.find((d) => d.id === dealId);
     if (!deal || deal.stage === targetStage) return;
+    const previousLead = deal.lead_id ? leads.find((lead) => lead.id === deal.lead_id) : undefined;
+    const nextLeadStatus = STAGE_TO_LEAD_STATUS[targetStage];
 
     setDeals(deals.map((d) => (d.id === dealId ? { ...d, stage: targetStage as any } : d)));
+    if (deal.lead_id) {
+      setLeads((current) => current.map((lead) => (
+        lead.id === deal.lead_id ? { ...lead, status: nextLeadStatus } : lead
+      )));
+    }
 
     try {
       const { error } = await supabase.from("deals").update({ stage: targetStage }).eq("id", dealId);
       if (error) {
         fetchDealsAndLeads();
-      } else {
-        await supabase.from("activities").insert({
-          deal_id: dealId,
-          lead_id: deal.lead_id,
-          user_id: profile.id,
-          description: `Negociación "${deal.name}" movida a: ${targetStage}`,
-          type: "stage_change",
-        });
+        return;
       }
+
+      if (deal.lead_id) {
+        const { error: leadError } = await supabase
+          .from("leads")
+          .update({ status: nextLeadStatus })
+          .eq("id", deal.lead_id);
+
+        if (leadError) {
+          await supabase.from("deals").update({ stage: deal.stage }).eq("id", dealId);
+          setDeals((current) => current.map((item) => item.id === dealId ? deal : item));
+          if (previousLead) {
+            setLeads((current) => current.map((lead) => lead.id === previousLead.id ? previousLead : lead));
+          }
+          return;
+        }
+      }
+
+      await supabase.from("activities").insert({
+        deal_id: dealId,
+        lead_id: deal.lead_id,
+        user_id: profile.id,
+        description: `Negociación "${deal.name}" movida a: ${targetStage}; prospecto sincronizado a: ${nextLeadStatus}`,
+        type: "stage_change",
+      });
     } catch {
       fetchDealsAndLeads();
     }
   };
 
-  // ✅ NUEVO: Crear deal rápido desde un lead de la columna Nuevo lead (prospectos sin deal)
-  const handlePromoteLeadToDeal = async (lead: Lead) => {
-    if (!profile) return;
-    const payload = {
-      name: `${lead.first_name} ${lead.last_name}`,
-      value: 0,
+  const openCreateDeal = (lead?: Lead) => {
+    const importedAmount = Number(lead?.raw_data?._crm_deposit_amount ?? 0);
+    setEditingDealId(null);
+    setFormError("");
+    setFormData({
+      name: lead ? `${lead.first_name} ${lead.last_name}`.trim() : "",
+      value: importedAmount > 0 ? String(importedAmount) : "",
+      lead_id: lead?.id ?? leads[0]?.id ?? "",
       stage: "Nuevo lead",
-      lead_id: lead.id,
-      agent_id: profile.id,
-      team_id: profile.team_id || null,
-    };
-    const { data, error } = await supabase.from("deals").insert(payload).select().single();
-    if (!error && data) {
-      setDeals([...deals, data as Deal]);
-      await supabase.from("activities").insert({
-        deal_id: data.id,
-        lead_id: lead.id,
-        user_id: profile.id,
-        description: `Prospecto promovido a negociación: "${data.name}"`,
-        type: "creation",
-      });
-    }
+    });
+    setIsFormOpen(true);
   };
 
-  const handleCreateDeal = async (e: React.FormEvent) => {
+  const openEditDeal = (deal: Deal) => {
+    setEditingDealId(deal.id);
+    setFormError("");
+    setFormData({
+      name: deal.name,
+      value: deal.value > 0 ? String(deal.value) : "",
+      lead_id: deal.lead_id ?? "",
+      stage: deal.stage,
+    });
+    setIsFormOpen(true);
+  };
+
+  const handleSaveDeal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
+    const value = Number(formData.value);
+    if (!Number.isFinite(value) || value <= 0) {
+      setFormError("Captura un monto de depósito mayor a cero.");
+      return;
+    }
+
+    setIsSaving(true);
+    setFormError("");
     try {
+      const selectedLead = leads.find((lead) => lead.id === formData.lead_id);
+      const nextLeadStatus = STAGE_TO_LEAD_STATUS[formData.stage as Stage];
       const payload = {
         name: formData.name,
-        value: Number(formData.value),
+        value,
         stage: formData.stage,
         lead_id: formData.lead_id || null,
-        agent_id: profile.id,
-        team_id: profile.team_id || null,
+        agent_id: selectedLead?.agent_id ?? profile.id,
+        team_id: selectedLead?.team_id ?? profile.team_id ?? null,
       };
-      const { data, error } = await supabase.from("deals").insert(payload).select().single();
-      if (!error && data) {
-        setDeals([...deals, data as Deal]);
+
+      if (editingDealId) {
+        const originalDeal = deals.find((deal) => deal.id === editingDealId);
+        const { data, error } = await supabase
+          .from("deals")
+          .update(payload)
+          .eq("id", editingDealId)
+          .select()
+          .single();
+        if (error) throw error;
+
+        if (data.lead_id) {
+          const { error: leadError } = await supabase
+            .from("leads")
+            .update({ status: nextLeadStatus })
+            .eq("id", data.lead_id);
+          if (leadError) {
+            if (originalDeal) {
+              await supabase.from("deals").update({
+                name: originalDeal.name,
+                value: originalDeal.value,
+                stage: originalDeal.stage,
+                lead_id: originalDeal.lead_id ?? null,
+                agent_id: originalDeal.agent_id ?? null,
+                team_id: originalDeal.team_id ?? null,
+              }).eq("id", originalDeal.id);
+            }
+            throw leadError;
+          }
+          setLeads((current) => current.map((lead) => (
+            lead.id === data.lead_id ? { ...lead, status: nextLeadStatus } : lead
+          )));
+        }
+
+        setDeals((current) => current.map((deal) => deal.id === editingDealId ? data as Deal : deal));
         setIsFormOpen(false);
         await supabase.from("activities").insert({
-          deal_id: data.id,
+          deal_id: editingDealId,
           lead_id: data.lead_id || null,
           user_id: profile.id,
-          description: `Negociación creada: "${data.name}" por $${data.value}`,
-          type: "creation",
+          description: `Negociación actualizada: "${data.name}" por $${data.value}`,
+          type: "update",
         });
+        return;
       }
-    } catch (err) { console.error(err); }
+
+      const { data, error } = await supabase.from("deals").insert(payload).select().single();
+      if (error) throw error;
+
+      if (data.lead_id) {
+        const { error: leadError } = await supabase
+          .from("leads")
+          .update({ status: nextLeadStatus })
+          .eq("id", data.lead_id);
+        if (leadError) {
+          await supabase.from("deals").delete().eq("id", data.id);
+          throw leadError;
+        }
+        setLeads((current) => current.map((lead) => (
+          lead.id === data.lead_id ? { ...lead, status: nextLeadStatus } : lead
+        )));
+      }
+
+      setDeals((current) => [...current, data as Deal]);
+      setIsFormOpen(false);
+      await supabase.from("activities").insert({
+        deal_id: data.id,
+        lead_id: data.lead_id || null,
+        user_id: profile.id,
+        description: `Negociación creada: "${data.name}" por $${data.value}`,
+        type: "creation",
+      });
+    } catch (err) {
+      console.error(err);
+      setFormError("No se pudo guardar la negociación. Intenta nuevamente.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const totalPipeline = deals.filter((d) => !["Ganado","Perdido"].includes(d.stage)).reduce((sum, d) => sum + Number(d.value || 0), 0);
@@ -202,7 +315,7 @@ export const NegociacionesKanban = () => {
             <p className="text-xs text-[#4A6080] mt-0.5">Arrastra los deals entre columnas para actualizar su etapa</p>
           </div>
           <button
-            onClick={() => { setFormData({ name:"", value:0, lead_id: leads[0]?.id || "", stage:"Nuevo lead" }); setIsFormOpen(true); }}
+            onClick={() => openCreateDeal()}
             className="gold-button-primary flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-lg shrink-0"
           >
             <Plus className="h-3.5 w-3.5" /> Nueva Negociación
@@ -293,7 +406,7 @@ export const NegociacionesKanban = () => {
                 <div className="flex-1 overflow-y-auto p-2 space-y-2">
                   {stageDeals.map((deal) => {
                     const lead = leads.find((l) => l.id === deal.lead_id);
-                    return <DealCard key={deal.id} deal={deal} lead={lead} stageColor={cfg.color} onDragStart={handleDragStart} onDelete={handleDeleteDeal} canDelete={!isAgent} />;
+                    return <DealCard key={deal.id} deal={deal} lead={lead} stageColor={cfg.color} onDragStart={handleDragStart} onEdit={openEditDeal} onDelete={handleDeleteDeal} canDelete={!isAgent} />;
                   })}
 
                   {/* ✅ NUEVO: Prospectos sin deal en columna Nuevo lead */}
@@ -302,11 +415,11 @@ export const NegociacionesKanban = () => {
                       key={`lead-${lead.id}`}
                       className="group rounded-xl p-3 transition-all duration-150 cursor-pointer hover:-translate-y-0.5"
                       style={{ background:"rgba(10,18,36,0.5)", border:"1px dashed rgba(100,116,139,0.4)", borderLeft:"3px solid #64748B" }}
-                      title="Clic para promover a negociación"
-                      onClick={() => handlePromoteLeadToDeal(lead)}
+                      title="Clic para capturar el depósito y crear la negociación"
+                      onClick={() => openCreateDeal(lead)}
                     >
                       <p className="text-[10px] font-semibold text-[#64748B] truncate mb-1">{lead.first_name} {lead.last_name}</p>
-                      <p className="text-[9px] text-[#334155]">📋 Prospecto — clic para crear deal</p>
+                      <p className="text-[9px] text-[#334155]">Capturar depósito y crear deal</p>
                     </div>
                   ))}
 
@@ -331,14 +444,14 @@ export const NegociacionesKanban = () => {
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(5,8,20,0.75)] backdrop-blur-md p-4">
           <form
-            onSubmit={handleCreateDeal}
+            onSubmit={handleSaveDeal}
             className="w-full max-w-md rounded-2xl p-7 space-y-5"
             style={{ background:"rgba(8,15,32,0.95)", border:"1px solid rgba(212,175,55,0.18)", boxShadow:"0 24px 64px rgba(0,0,0,0.7)" }}
           >
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-title font-semibold text-[#E2E8F0]">Nueva Negociación</h3>
-                <p className="text-[11px] text-[#4A6080] mt-0.5">Registra un nuevo deal en el pipeline</p>
+                <h3 className="text-base font-title font-semibold text-[#E2E8F0]">{editingDealId ? "Editar Negociación" : "Nueva Negociación"}</h3>
+                <p className="text-[11px] text-[#4A6080] mt-0.5">Captura el depósito que alimentará los totales del pipeline</p>
               </div>
               <button type="button" onClick={() => setIsFormOpen(false)} className="h-7 w-7 flex items-center justify-center rounded-lg text-[#4A6080] hover:text-[#F8FAFC] hover:bg-[rgba(255,255,255,0.06)] transition-all">
                 <X className="h-4 w-4" />
@@ -354,11 +467,18 @@ export const NegociacionesKanban = () => {
               />
             </FormField>
 
-            <FormField label="Valor (USD)">
+            <FormField label="Monto de depósito (USD)">
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#D4AF37]"><DollarSign className="h-3.5 w-3.5" /></span>
-                <input type="number" required min={0} value={formData.value}
-                  onChange={(e) => setFormData({ ...formData, value: Number(e.target.value) })}
+                <input type="number" required min="0.01" step="0.01" inputMode="decimal" value={formData.value}
+                  onChange={(e) => { setFormData({ ...formData, value: e.target.value }); setFormError(""); }}
+                  onBlur={() => {
+                    const amount = Number(formData.value);
+                    if (formData.value && (!Number.isFinite(amount) || amount <= 0)) {
+                      setFormError("Captura un monto de depósito mayor a cero.");
+                    }
+                  }}
+                  aria-describedby={formError ? "deal-form-error" : undefined}
                   className="w-full pl-8 pr-3.5 py-2.5 text-sm bg-[rgba(5,8,20,0.7)] border border-[rgba(212,175,55,0.12)] rounded-lg text-[#D4AF37] font-mono-numbers focus:outline-none focus:border-[rgba(212,175,55,0.4)] transition-all"
                 />
               </div>
@@ -390,9 +510,17 @@ export const NegociacionesKanban = () => {
               </div>
             </FormField>
 
+            {formError && (
+              <p id="deal-form-error" role="alert" className="text-xs text-red-400 rounded-lg border border-red-500/20 bg-red-950/20 px-3 py-2">
+                {formError}
+              </p>
+            )}
+
             <div className="flex justify-end gap-2.5 pt-1">
               <button type="button" onClick={() => setIsFormOpen(false)} className="gold-button-secondary px-4 py-2 text-xs font-semibold rounded-lg">Cancelar</button>
-              <button type="submit" className="gold-button-primary px-5 py-2 text-xs font-bold rounded-lg">Crear Deal</button>
+              <button type="submit" disabled={isSaving} className="gold-button-primary px-5 py-2 text-xs font-bold rounded-lg disabled:opacity-50">
+                {isSaving ? "Guardando..." : editingDealId ? "Guardar cambios" : "Crear negociación"}
+              </button>
             </div>
           </form>
         </div>
@@ -408,26 +536,46 @@ export const NegociacionesKanban = () => {
   );
 };
 
-interface DealCardProps { deal: Deal; lead: Lead | undefined; stageColor: string; onDragStart: (e: React.DragEvent, id: string) => void; onDelete: (id: string, name: string, e: React.MouseEvent) => void; canDelete: boolean; }
+interface DealCardProps {
+  deal: Deal;
+  lead: Lead | undefined;
+  stageColor: string;
+  onDragStart: (e: React.DragEvent, id: string) => void;
+  onEdit: (deal: Deal) => void;
+  onDelete: (id: string, name: string, e: React.MouseEvent) => void;
+  canDelete: boolean;
+}
 
-const DealCard = ({ deal, lead, stageColor, onDragStart, onDelete, canDelete }: DealCardProps) => (
+const DealCard = ({ deal, lead, stageColor, onDragStart, onEdit, onDelete, canDelete }: DealCardProps) => (
   <div draggable onDragStart={(e) => onDragStart(e, deal.id)}
     className="group rounded-xl p-3.5 cursor-grab active:cursor-grabbing transition-all duration-150 hover:-translate-y-0.5 relative"
     style={{ background:"rgba(10,18,36,0.8)", border:"1px solid rgba(255,255,255,0.06)", borderLeft:`3px solid ${stageColor}`, boxShadow:"0 2px 8px rgba(0,0,0,0.3)" }}
     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 20px rgba(0,0,0,0.5), 0 0 0 1px ${stageColor}33`; }}
     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)"; }}
   >
-    {/* Botón eliminar — visible al hover */}
-    {canDelete && (
+    <div className="absolute top-2 right-2 flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
       <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onEdit(deal); }}
+        className="h-7 w-7 inline-flex items-center justify-center rounded text-[#64748B] hover:text-[#D4AF37] hover:bg-[rgba(212,175,55,0.1)] transition-all"
+        title="Editar monto"
+        aria-label={`Editar monto de ${deal.name}`}
+      >
+        <Pencil className="h-3 w-3" />
+      </button>
+      {canDelete && (
+      <button
+        type="button"
         onClick={(e) => onDelete(deal.id, deal.name, e)}
-        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded text-[#334155] hover:text-[#EF4444] hover:bg-[rgba(239,68,68,0.1)] transition-all"
+        className="h-7 w-7 inline-flex items-center justify-center rounded text-[#64748B] hover:text-[#EF4444] hover:bg-[rgba(239,68,68,0.1)] transition-all"
         title="Eliminar deal"
+        aria-label={`Eliminar ${deal.name}`}
       >
         <Trash2 className="h-3 w-3" />
       </button>
-    )}
-    <p className="text-xs font-semibold text-[#CBD5E1] truncate leading-snug mb-2 pr-5">{deal.name}</p>
+      )}
+    </div>
+    <p className="text-xs font-semibold text-[#CBD5E1] truncate leading-snug mb-2 pr-16">{deal.name}</p>
     <div className="flex items-center gap-1 text-sm font-bold font-mono-numbers mb-2" style={{ color: stageColor }}>
       <span className="text-[10px]">$</span>{Number(deal.value).toLocaleString("es-MX", { maximumFractionDigits: 0 })}
     </div>

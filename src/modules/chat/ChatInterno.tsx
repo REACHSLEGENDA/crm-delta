@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { Channel, Message } from "@/types";
-import { MessageSquare, Send, Hash, User, Lock, Plus, X, ChevronDown } from "lucide-react";
+import type { Channel, Message, Profile } from "@/types";
+import { MessageSquare, Send, Hash, User, Lock, Plus, X } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 // ✅ Departamentos predefinidos con control de acceso
@@ -73,7 +73,7 @@ export const ChatInterno = () => {
             // El fallback `|| []` asegura que no falle si members es null. 
             // isSuperAdmin también podría verlos si se desea, pero usualmente privado es solo miembros.
             if (isSuperAdmin) return true;
-            return (ch.members || []).includes(profile.id);
+            return profile?.id ? (ch.members || []).includes(profile.id) : false;
           }
 
           if (isSuperAdmin) return true; // Superadmin ve todo
