@@ -40,17 +40,17 @@ export const usePermissions = () => {
     // Importar datos — solo ADMIN
     canImport: !isAuditMode && isSuperAdmin,
 
-    // Asignar leads a agentes — ADMIN + GERENTE + SUPERVISOR
-    canAssignLeads: !isAuditMode && (isSuperAdmin || isManager || isSupervisor),
+    // Asignar leads a agentes — ADMIN + GERENTE + SUPERVISOR (o si el auditor original lo es)
+    canAssignLeads: isSuperAdmin || isManager || isSupervisor || (isAuditMode && (originalProfile?.role === "SUPERADMIN" || originalProfile?.role === "MANAGER" || originalProfile?.role === "SUPERVISOR")),
 
     // Crear / registrar usuarios — ADMIN + GERENTE
     canCreateUsers: !isAuditMode && (isSuperAdmin || isManager),
 
-    // Modificar cualquier lead — ADMIN + GERENTE
-    canEditAll: !isAuditMode && (isSuperAdmin || isManager),
+    // Modificar cualquier lead — ADMIN + GERENTE (o si el auditor original lo es)
+    canEditAll: isSuperAdmin || isManager || (isAuditMode && (originalProfile?.role === "SUPERADMIN" || originalProfile?.role === "MANAGER")),
 
-    // Ver todos los leads (sin filtro de equipo/agente) — ADMIN + GERENTE + SUPERVISOR
-    canViewAll: isSuperAdmin || isManager || isSupervisor,
+    // Ver todos los leads (sin filtro de equipo/agente) — ADMIN + GERENTE + SUPERVISOR (o si el auditor original lo es)
+    canViewAll: isSuperAdmin || isManager || isSupervisor || (isAuditMode && (originalProfile?.role === "SUPERADMIN" || originalProfile?.role === "MANAGER" || originalProfile?.role === "SUPERVISOR")),
 
     // Ver leads del equipo — ADMIN + GERENTE + SUPERVISOR
     canViewTeam: isSuperAdmin || isManager || isSupervisor,
