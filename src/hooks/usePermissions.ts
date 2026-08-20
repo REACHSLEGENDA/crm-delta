@@ -49,8 +49,8 @@ export const usePermissions = () => {
     // Modificar cualquier lead — ADMIN + GERENTE
     canEditAll: !isAuditMode && (isSuperAdmin || isManager),
 
-    // Ver todos los leads (sin filtro de equipo/agente) — ADMIN + GERENTE
-    canViewAll: isSuperAdmin || isManager,
+    // Ver todos los leads (sin filtro de equipo/agente) — ADMIN + GERENTE + SUPERVISOR
+    canViewAll: isSuperAdmin || isManager || isSupervisor,
 
     // Ver leads del equipo — ADMIN + GERENTE + SUPERVISOR
     canViewTeam: isSuperAdmin || isManager || isSupervisor,

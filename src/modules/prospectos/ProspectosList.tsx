@@ -15,7 +15,7 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 500, 1000];
 
 export const ProspectosList = () => {
   const { profile } = useAuth();
-  const { isSuperAdmin, isManager, isAgent, canDelete, isRetention, isCompliance, canViewAll } = usePermissions();
+  const { isSuperAdmin, isManager, isSupervisor, isAgent, canDelete, isRetention, isCompliance, canViewAll, canAssignLeads } = usePermissions();
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [agents, setAgents] = useState<Profile[]>([]);
@@ -478,7 +478,7 @@ export const ProspectosList = () => {
           <Users className="h-4 w-4 text-[#D4AF37]" />
           <span className="text-xs font-semibold text-[#D4AF37]">{selectedIds.size} seleccionados</span>
           <div className="flex items-center gap-2 ml-auto">
-            {(isSuperAdmin || isManager) && (
+            {canAssignLeads && (
               <>
                 <select
                   value={bulkAgentId}
@@ -851,7 +851,7 @@ export const ProspectosList = () => {
                 <input
                   type="text"
                   required
-                  disabled={isRetention || isCompliance}
+                  disabled={isRetention || isCompliance || isSupervisor}
                   value={formData.first_name}
                   onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -862,7 +862,7 @@ export const ProspectosList = () => {
                 <input
                   type="text"
                   required
-                  disabled={isRetention || isCompliance}
+                  disabled={isRetention || isCompliance || isSupervisor}
                   value={formData.last_name}
                   onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -876,7 +876,7 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Email</label>
                 <input
                   type="email"
-                  disabled={isRetention || isCompliance}
+                  disabled={isRetention || isCompliance || isSupervisor}
                   value={formData.email || ""}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -886,7 +886,7 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Teléfono</label>
                 <input
                   type="text"
-                  disabled={isRetention || isCompliance}
+                  disabled={isRetention || isCompliance || isSupervisor}
                   value={formData.phone || ""}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -901,7 +901,7 @@ export const ProspectosList = () => {
                 <input
                   type="text"
                   placeholder="Ej. México"
-                  disabled={isRetention || isCompliance}
+                  disabled={isRetention || isCompliance || isSupervisor}
                   value={formData.country || ""}
                   onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -911,7 +911,7 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Capacidad de Inversión</label>
                 <select
                   value={formData.investment_capacity || ""}
-                  disabled={isRetention || isCompliance}
+                  disabled={isRetention || isCompliance || isSupervisor}
                   onChange={(e) => setFormData({ ...formData, investment_capacity: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8] disabled:opacity-50"
                 >
@@ -964,7 +964,7 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Fuente</label>
                 <select
                   value={formData.source}
-                  disabled={isRetention || isCompliance}
+                  disabled={isRetention || isCompliance || isSupervisor}
                   onChange={(e) => setFormData({ ...formData, source: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8] disabled:opacity-50"
                 >
@@ -977,7 +977,7 @@ export const ProspectosList = () => {
             </div>
 
             {/* Assigned agent */}
-            {(isSuperAdmin || isManager) && (
+            {canAssignLeads && (
               <div>
                 <label className="block text-xs text-[#94A3B8] mb-1">Agente Asignado</label>
                 <select
