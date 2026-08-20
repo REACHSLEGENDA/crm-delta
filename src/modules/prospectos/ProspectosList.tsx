@@ -335,6 +335,27 @@ export const ProspectosList = () => {
     finally { setBulkAssigning(false); }
   };
 
+  // ✅ Cambio masivo de estado
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkStatusUpdating, setBulkStatusUpdating] = useState(false);
+  const handleBulkStatusUpdate = async () => {
+    if (!bulkStatus || selectedIds.size === 0) return;
+    setBulkStatusUpdating(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const { error } = await supabase
+        .from("leads")
+        .update({ status: bulkStatus })
+        .in("id", ids);
+      if (!error) {
+        setSelectedIds(new Set());
+        setBulkStatus("");
+        fetchLeads();
+      }
+    } catch (err) { console.error(err); }
+    finally { setBulkStatusUpdating(false); }
+  };
+
   return (
     <div className="space-y-6 p-6 bg-[#050814] min-h-screen text-[#F8FAFC]">
       {/* Header */}
@@ -476,6 +497,32 @@ export const ProspectosList = () => {
                 </button>
               </>
             )}
+
+            {/* ✅ NUEVO: Cambiar estado masivamente */}
+            <>
+              <select
+                value={bulkStatus}
+                onChange={(e) => setBulkStatus(e.target.value)}
+                className="px-3 py-1.5 text-xs bg-[#0D1428] border border-[rgba(212,175,55,0.2)] rounded text-[#94A3B8] focus:outline-none focus:border-[#D4AF37]"
+              >
+                <option value="">Cambiar estado...</option>
+                <option value="Nuevo">Nuevo</option>
+                <option value="Contactado">Contactado</option>
+                <option value="Interesado">Interesado</option>
+                <option value="Asesoría">Asesoría</option>
+                <option value="Depósito pendiente">Depósito pendiente</option>
+                <option value="Ganado">Ganado</option>
+                <option value="Perdido">Perdido</option>
+              </select>
+              <button
+                onClick={handleBulkStatusUpdate}
+                disabled={!bulkStatus || bulkStatusUpdating}
+                className="gold-button-primary px-3 py-1.5 text-xs font-bold rounded disabled:opacity-50"
+              >
+                {bulkStatusUpdating ? "Actualizando..." : "Actualizar"}
+              </button>
+            </>
+            
             
             {/* Botón para agregar a la cola de llamadas */}
             <button
