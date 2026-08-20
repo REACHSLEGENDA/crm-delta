@@ -12,14 +12,15 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const [selectedId, setSelectedId] = useState("");
 
   const isSuperAdmin = originalProfile?.role === "SUPERADMIN";
-  const isImpersonating = originalProfile?.id !== profile?.id;
+  const isImpersonating = Boolean(originalProfile && profile && originalProfile.id !== profile.id);
 
   useEffect(() => {
     if (isSuperAdmin) {
       supabase
         .from("profiles")
-        .select("*")
+        .select("id,email,first_name,last_name,role,department,team_id,active,last_seen_at,created_at,updated_at")
         .neq("id", originalProfile?.id || "")
+        .eq("active", true)
         .then(({ data }) => {
           if (data) setProfiles(data as Profile[]);
         });
@@ -54,7 +55,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
               <div className="flex items-center gap-2">
                 <UserCheck className="h-4 w-4" />
                 <span>
-                  Modo Auditoría Activo: Emulando vista de{" "}
+                  Vista simulada de solo lectura: perspectiva de{" "}
                   <strong>
                     {profile?.first_name} {profile?.last_name}
                   </strong>{" "}
@@ -103,7 +104,14 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           </header>
 
           {/* Main content */}
-          <div className="flex-1 overflow-auto">{children}</div>
+          <div className="flex-1 overflow-auto">
+            <div
+              className={isImpersonating ? "pointer-events-none opacity-[0.96]" : undefined}
+              aria-disabled={isImpersonating || undefined}
+            >
+              {children}
+            </div>
+          </div>
         </div>
       </div>
     </SidebarProvider>

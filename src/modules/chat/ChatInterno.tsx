@@ -8,15 +8,15 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 // ✅ Departamentos predefinidos con control de acceso
 const DEPT_CHANNELS = [
-  { name: "Ventas",      type: "ventas",   roles: ["AGENT","MANAGER","SUPERADMIN"] },
-  { name: "Compliance",  type: "alertas",  roles: ["MANAGER","SUPERADMIN"] },
-  { name: "Retention",   type: "general",  roles: ["MANAGER","SUPERADMIN"] },
-  { name: "Líderes",     type: "alertas",  roles: ["MANAGER","SUPERADMIN"] },
+  { name: "Ventas",      type: "ventas",   roles: ["AGENT","MANAGER","SUPERADMIN"], departments: ["Ventas"] },
+  { name: "Compliance",  type: "alertas",  roles: ["MANAGER","SUPERADMIN"], departments: ["Cumplimiento"] },
+  { name: "Retention",   type: "general",  roles: ["MANAGER","SUPERADMIN"], departments: ["Retencion"] },
+  { name: "Líderes",     type: "alertas",  roles: ["MANAGER","SUPERADMIN"], departments: [] },
 ];
 
 export const ChatInterno = () => {
   const { profile } = useAuth();
-  const { isSuperAdmin, isManager } = usePermissions();
+  const { isSuperAdmin, isManager, isAuditMode } = usePermissions();
   const canManageChannels = isSuperAdmin || isManager;
 
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -65,7 +65,7 @@ export const ChatInterno = () => {
           const role = profile?.role || "";
           
           if (deptConfig) {
-            return deptConfig.roles.includes(role);
+            return deptConfig.roles.includes(role) || deptConfig.departments.includes(profile?.department || "");
           }
           
           // Canales creados manualmente: el `type` define quién puede entrar
@@ -105,10 +105,14 @@ export const ChatInterno = () => {
 
   useEffect(() => {
     if (profile) {
-      ensureDefaultChannels().then(fetchChannels);
+      if (isAuditMode) {
+        fetchChannels();
+      } else {
+        ensureDefaultChannels().then(fetchChannels);
+      }
       if (canManageChannels) fetchAllUsers();
     }
-  }, [profile]);
+  }, [profile, isAuditMode]);
 
   // ✅ NUEVO: Crear canal personalizado
   const handleCreateChannel = async (e: React.FormEvent) => {

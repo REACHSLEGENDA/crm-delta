@@ -84,11 +84,12 @@ export const ComplianceDocs = ({ leadId }: ComplianceDocsProps) => {
     if (!confirm("¿Seguro que deseas eliminar este documento?")) return;
 
     try {
-      // Remove from DB
-      await supabase.from("compliance_documents").delete().eq("id", doc.id);
-      
-      // Remove from Storage
-      await supabase.storage.from("compliance_docs").remove([doc.file_path]);
+      // Keep metadata available while Storage evaluates its authorization policy.
+      const { error: storageError } = await supabase.storage.from("compliance_docs").remove([doc.file_path]);
+      if (storageError) throw storageError;
+
+      const { error: dbError } = await supabase.from("compliance_documents").delete().eq("id", doc.id);
+      if (dbError) throw dbError;
 
       setDocuments(docs => docs.filter(d => d.id !== doc.id));
     } catch (err) {
@@ -98,9 +99,10 @@ export const ComplianceDocs = ({ leadId }: ComplianceDocsProps) => {
 
   const handleView = async (doc: ComplianceDocument) => {
     try {
-      const { data } = supabase.storage.from("compliance_docs").getPublicUrl(doc.file_path);
-      if (data?.publicUrl) {
-        window.open(data.publicUrl, "_blank");
+      const { data, error } = await supabase.storage.from("compliance_docs").createSignedUrl(doc.file_path, 60);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
       }
     } catch (err) {
       console.error(err);

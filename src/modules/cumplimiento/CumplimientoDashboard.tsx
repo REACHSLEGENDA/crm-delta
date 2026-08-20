@@ -54,11 +54,12 @@ export const CumplimientoDashboard = () => {
     fetchDashboardData();
   }, []);
 
-  const handleViewDoc = (doc: ComplianceDocument) => {
+  const handleViewDoc = async (doc: ComplianceDocument) => {
     try {
-      const { data } = supabase.storage.from("compliance_docs").getPublicUrl(doc.file_path);
-      if (data?.publicUrl) {
-        window.open(data.publicUrl, "_blank");
+      const { data, error } = await supabase.storage.from("compliance_docs").createSignedUrl(doc.file_path, 60);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
       }
     } catch (err) {
       console.error(err);

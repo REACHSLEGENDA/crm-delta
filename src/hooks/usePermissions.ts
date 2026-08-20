@@ -1,8 +1,9 @@
 import { useAuth } from "@/auth/useAuth";
 
 export const usePermissions = () => {
-  const { profile } = useAuth();
+  const { profile, originalProfile } = useAuth();
   const role = profile?.role;
+  const isAuditMode = Boolean(originalProfile && profile && originalProfile.id !== profile.id);
 
   const isSuperAdmin = role === "SUPERADMIN"; // Admin — acceso total
   const isManager    = role === "MANAGER";    // Gerente
@@ -25,27 +26,28 @@ export const usePermissions = () => {
     isSales,
     isRetention,
     isCompliance,
+    isAuditMode,
 
     // Solo ADMIN puede auditar / impersonar perspectivas
     canAudit: isSuperAdmin,
 
     // Solo ADMIN puede eliminar registros
-    canDelete: isSuperAdmin,
+    canDelete: !isAuditMode && isSuperAdmin,
 
     // Exportar datos — solo ADMIN
-    canExport: isSuperAdmin,
+    canExport: !isAuditMode && isSuperAdmin,
 
     // Importar datos — solo ADMIN
-    canImport: isSuperAdmin,
+    canImport: !isAuditMode && isSuperAdmin,
 
     // Asignar leads a agentes — ADMIN + GERENTE + SUPERVISOR
-    canAssignLeads: isSuperAdmin || isManager || isSupervisor,
+    canAssignLeads: !isAuditMode && (isSuperAdmin || isManager || isSupervisor),
 
     // Crear / registrar usuarios — ADMIN + GERENTE
-    canCreateUsers: isSuperAdmin || isManager,
+    canCreateUsers: !isAuditMode && (isSuperAdmin || isManager),
 
     // Modificar cualquier lead — ADMIN + GERENTE
-    canEditAll: isSuperAdmin || isManager,
+    canEditAll: !isAuditMode && (isSuperAdmin || isManager),
 
     // Ver todos los leads (sin filtro de equipo/agente) — ADMIN + GERENTE
     canViewAll: isSuperAdmin || isManager,
@@ -54,7 +56,7 @@ export const usePermissions = () => {
     canViewTeam: isSuperAdmin || isManager || isSupervisor,
 
     // Ver solo los propios — todos, pero es el scope de EJECUTIVO
-    canEditOwn: isAgent,
+    canEditOwn: !isAuditMode && isAgent,
 
     // Dashboard de monitoreo completo — ADMIN + GERENTE
     canMonitor: isSuperAdmin || isManager,

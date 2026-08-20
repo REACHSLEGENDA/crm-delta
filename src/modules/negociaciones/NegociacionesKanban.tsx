@@ -105,7 +105,6 @@ export const NegociacionesKanban = () => {
     if (!dealId || !profile) return;
     const deal = deals.find((d) => d.id === dealId);
     if (!deal || deal.stage === targetStage) return;
-    const previousLead = deal.lead_id ? leads.find((lead) => lead.id === deal.lead_id) : undefined;
     const nextLeadStatus = STAGE_TO_LEAD_STATUS[targetStage];
 
     setDeals(deals.map((d) => (d.id === dealId ? { ...d, stage: targetStage as any } : d)));
@@ -120,22 +119,6 @@ export const NegociacionesKanban = () => {
       if (error) {
         fetchDealsAndLeads();
         return;
-      }
-
-      if (deal.lead_id) {
-        const { error: leadError } = await supabase
-          .from("leads")
-          .update({ status: nextLeadStatus })
-          .eq("id", deal.lead_id);
-
-        if (leadError) {
-          await supabase.from("deals").update({ stage: deal.stage }).eq("id", dealId);
-          setDeals((current) => current.map((item) => item.id === dealId ? deal : item));
-          if (previousLead) {
-            setLeads((current) => current.map((lead) => lead.id === previousLead.id ? previousLead : lead));
-          }
-          return;
-        }
       }
 
       await supabase.from("activities").insert({
@@ -199,7 +182,6 @@ export const NegociacionesKanban = () => {
       };
 
       if (editingDealId) {
-        const originalDeal = deals.find((deal) => deal.id === editingDealId);
         const { data, error } = await supabase
           .from("deals")
           .update(payload)
@@ -209,23 +191,6 @@ export const NegociacionesKanban = () => {
         if (error) throw error;
 
         if (data.lead_id) {
-          const { error: leadError } = await supabase
-            .from("leads")
-            .update({ status: nextLeadStatus })
-            .eq("id", data.lead_id);
-          if (leadError) {
-            if (originalDeal) {
-              await supabase.from("deals").update({
-                name: originalDeal.name,
-                value: originalDeal.value,
-                stage: originalDeal.stage,
-                lead_id: originalDeal.lead_id ?? null,
-                agent_id: originalDeal.agent_id ?? null,
-                team_id: originalDeal.team_id ?? null,
-              }).eq("id", originalDeal.id);
-            }
-            throw leadError;
-          }
           setLeads((current) => current.map((lead) => (
             lead.id === data.lead_id ? { ...lead, status: nextLeadStatus } : lead
           )));
@@ -247,14 +212,6 @@ export const NegociacionesKanban = () => {
       if (error) throw error;
 
       if (data.lead_id) {
-        const { error: leadError } = await supabase
-          .from("leads")
-          .update({ status: nextLeadStatus })
-          .eq("id", data.lead_id);
-        if (leadError) {
-          await supabase.from("deals").delete().eq("id", data.id);
-          throw leadError;
-        }
         setLeads((current) => current.map((lead) => (
           lead.id === data.lead_id ? { ...lead, status: nextLeadStatus } : lead
         )));

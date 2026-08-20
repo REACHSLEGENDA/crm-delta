@@ -1,6 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import * as jose from "jsr:@panva/jose@6";
+import {
+  MIN_ADMIN_PASSWORD_LENGTH,
+  canResetUserPasswords,
+} from "../_shared/adminAuthorization.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,11 +33,14 @@ Deno.serve(async (req: Request) => {
     });
 
     const currentUserId = payload.sub;
+    if (!currentUserId) {
+      return new Response(JSON.stringify({ error: "Sesión inválida" }), { status: 401, headers: corsHeaders });
+    }
 
     const { target_user_id, new_password } = await req.json();
 
-    if (!target_user_id || !new_password) {
-      return new Response(JSON.stringify({ error: "Faltan parámetros" }), { status: 400, headers: corsHeaders });
+    if (!target_user_id || typeof new_password !== "string" || new_password.length < MIN_ADMIN_PASSWORD_LENGTH) {
+      return new Response(JSON.stringify({ error: `La contraseña debe tener al menos ${MIN_ADMIN_PASSWORD_LENGTH} caracteres` }), { status: 400, headers: corsHeaders });
     }
 
     const supabaseAdmin = createClient(
@@ -43,11 +50,11 @@ Deno.serve(async (req: Request) => {
 
     const { data: profile } = await supabaseAdmin
       .from("profiles")
-      .select("role")
+      .select("role,active")
       .eq("id", currentUserId)
       .single();
 
-    if (!profile || (profile.role !== "SUPERADMIN" && profile.role !== "MANAGER")) {
+    if (!profile || !canResetUserPasswords(profile.role, profile.active)) {
       return new Response(JSON.stringify({ error: "No tienes permisos" }), { status: 403, headers: corsHeaders });
     }
 

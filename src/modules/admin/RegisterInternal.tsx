@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ShieldCheck, UserPlus, AlertCircle } from "lucide-react";
+import { useAuth } from "@/auth/useAuth";
 
 export const RegisterInternal = () => {
+  const { originalProfile } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -18,26 +20,20 @@ export const RegisterInternal = () => {
     setMessage(null);
 
     try {
-      // In Supabase client side, auth.signUp will register the user.
-      // If we pass user metadata, the public.profiles trigger handle_new_user() will sync it.
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            first_name: firstName,
-            last_name: lastName,
-            role: role,
-            department: department,
-          },
+      const { data, error } = await supabase.functions.invoke("admin_create_user", {
+        body: {
+          email,
+          password,
+          first_name: firstName,
+          last_name: lastName,
+          role,
+          department,
         },
       });
 
-      if (error) {
-        throw error;
-      }
+      if (error || data?.error) throw new Error(data?.error || error?.message || "No se pudo registrar al colaborador");
 
-      if (data?.user) {
+      if (data?.success) {
         setMessage({
           type: "success",
           text: `Colaborador registrado exitosamente. El usuario ${email} ya puede iniciar sesión.`,
@@ -127,13 +123,16 @@ export const RegisterInternal = () => {
           <div>
             <label className="block text-xs text-[#94A3B8] mb-1 font-semibold">Contraseña Provisional</label>
             <input
-              type="password"
-              required
+                type="password"
+                required
+                minLength={12}
+                autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-3 py-2 text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-white"
-              placeholder="••••••••"
-            />
+                placeholder="••••••••"
+              />
+              <p className="text-[10px] text-[#64748B] mt-1">Mínimo 12 caracteres.</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -146,7 +145,9 @@ export const RegisterInternal = () => {
               >
                 <option value="AGENT">EJECUTIVO — Seguimiento Propio</option>
                 <option value="SUPERVISOR">SUPERVISOR — Seguimiento de Equipo</option>
-                <option value="MANAGER">GERENTE — Gestión y Monitoreo</option>
+                {originalProfile?.role === "SUPERADMIN" && (
+                  <option value="MANAGER">GERENTE — Gestión y Monitoreo</option>
+                )}
               </select>
             </div>
             <div>

@@ -15,7 +15,7 @@ export const LoginPage = () => {
     setLoading(true);
     setError(null);
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -23,9 +23,29 @@ export const LoginPage = () => {
     if (authError) {
       setError(authError.message);
       setLoading(false);
-    } else {
-      navigate("/", { replace: true });
+      return;
     }
+
+    const userId = authData.user?.id;
+    const { data: profile, error: profileError } = userId
+      ? await supabase.from("profiles").select("active").eq("id", userId).maybeSingle()
+      : { data: null, error: null };
+
+    if (profileError || !profile) {
+      await supabase.auth.signOut();
+      setError("No se pudo validar el perfil asociado a esta cuenta.");
+      setLoading(false);
+      return;
+    }
+
+    if (!profile.active) {
+      await supabase.auth.signOut();
+      setError("Esta cuenta está inhabilitada. Contacta a un administrador.");
+      setLoading(false);
+      return;
+    }
+
+    navigate("/", { replace: true });
   };
 
   return (

@@ -56,24 +56,20 @@ export const AdminPanel = () => {
         })
         .eq("id", editingProfile.id);
 
+      if (error) throw error;
+
       if (editPassword.trim() !== "") {
-        const { error: fnError } = await supabase.functions.invoke('admin_update_password', {
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('admin_update_password', {
           body: { target_user_id: editingProfile.id, new_password: editPassword }
         });
-        if (fnError) {
-          console.error("Error cambiando contraseña:", fnError);
-          alert("Error al cambiar la contraseña. Asegúrate de tener permisos.");
-        } else {
-          alert("Contraseña actualizada con éxito.");
-        }
+        if (fnError || fnData?.error) throw new Error(fnData?.error || fnError?.message || "No se pudo cambiar la contraseña");
       }
 
-      if (!error) {
-        setEditingProfile(null);
-        fetchProfiles();
-      }
+      setEditingProfile(null);
+      fetchProfiles();
     } catch (err) {
       console.error(err);
+      alert(err instanceof Error ? err.message : "No se pudieron guardar los cambios.");
     }
   };
 
@@ -82,7 +78,8 @@ export const AdminPanel = () => {
     // Optimistic Update
     setProfiles(profiles.map(p => p.id === profile.id ? { ...p, active: nextActive } : p));
     try {
-      await supabase.from("profiles").update({ active: nextActive }).eq("id", profile.id);
+      const { error } = await supabase.from("profiles").update({ active: nextActive }).eq("id", profile.id);
+      if (error) throw error;
     } catch (err) {
       console.error(err);
       fetchProfiles();
@@ -259,9 +256,11 @@ export const AdminPanel = () => {
             <div className="pt-2 border-t border-[rgba(212,175,55,0.1)]">
               <label className="block text-xs text-[#94A3B8] mb-1">Cambiar Contraseña (Opcional)</label>
               <input
-                type="text"
+                type="password"
                 value={editPassword}
                 onChange={(e) => setEditPassword(e.target.value)}
+                minLength={12}
+                autoComplete="new-password"
                 className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-white"
                 placeholder="Escribe una nueva contraseña..."
               />
