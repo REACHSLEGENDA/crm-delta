@@ -1,7 +1,7 @@
 import { useEffect, useState, createContext, useContext } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/types";
-import type { User } from "@supabase/supabase-js";
+import type { Session, User } from "@supabase/supabase-js";
 
 interface AuthContextType {
   user: User | null;
@@ -32,69 +32,94 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [accessIssue, setAccessIssue] = useState<AuthContextType["accessIssue"]>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .maybeSingle();
+  useEffect(() => {
+    let active = true;
+    let authRequestId = 0;
 
-      if (error) {
-        console.error("Error fetching profile:", error);
+    const clearAuthState = () => {
+      setUser(null);
+      setOriginalProfile(null);
+      setImpersonatedProfile(null);
+      setAccessIssue(null);
+    };
+
+    const loadProfile = async (userId: string, requestId: number) => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", userId)
+          .maybeSingle();
+
+        if (!active || requestId !== authRequestId) return;
+
+        if (error) {
+          console.error("Error fetching profile:", error);
+          setOriginalProfile(null);
+          setAccessIssue("profile_load_failed");
+          return;
+        }
+
+        if (!data) {
+          setOriginalProfile(null);
+          setAccessIssue("profile_not_found");
+          return;
+        }
+
+        const nextProfile = data as Profile;
+        setOriginalProfile(nextProfile);
+        setAccessIssue(nextProfile.active ? null : "inactive");
+        if (!nextProfile.active) setImpersonatedProfile(null);
+      } catch (err) {
+        if (!active || requestId !== authRequestId) return;
+        console.error("Error fetching profile:", err);
         setOriginalProfile(null);
         setAccessIssue("profile_load_failed");
+      }
+    };
+
+    const applySession = async (session: Session | null) => {
+      const requestId = ++authRequestId;
+
+      if (!session?.user) {
+        if (!active) return;
+        clearAuthState();
+        setLoading(false);
         return;
       }
 
-      if (!data) {
-        setOriginalProfile(null);
-        setAccessIssue("profile_not_found");
-        return;
-      }
+      if (!active) return;
+      setLoading(true);
+      setUser(session.user);
+      await loadProfile(session.user.id, requestId);
 
-      const nextProfile = data as Profile;
-      setOriginalProfile(nextProfile);
-      setAccessIssue(nextProfile.active ? null : "inactive");
-      if (!nextProfile.active) setImpersonatedProfile(null);
-    } catch (err) {
-      console.error("Error fetching profile:", err);
-      setOriginalProfile(null);
-      setAccessIssue("profile_load_failed");
-    }
-  };
-
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        await fetchProfile(session.user.id);
-      } else {
-        setAccessIssue(null);
+      if (active && requestId === authRequestId) {
+        setLoading(false);
       }
-      setLoading(false);
-    }).catch(err => {
-      console.error("useAuth: getSession error:", err);
-      setLoading(false);
-    });
+    };
+
+    void supabase.auth.getSession()
+      .then(({ data: { session } }) => applySession(session))
+      .catch(err => {
+        if (!active) return;
+        console.error("useAuth: getSession error:", err);
+        clearAuthState();
+        setLoading(false);
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_, session) => {
-        if (session?.user) {
-          setLoading(true);
-          setUser(session.user);
-          await fetchProfile(session.user.id);
-        } else {
-          setUser(null);
-          setOriginalProfile(null);
-          setImpersonatedProfile(null);
-          setAccessIssue(null);
-        }
-        setLoading(false);
+      (_, session) => {
+        // Supabase holds an internal auth lock while this callback runs.
+        // Defer profile queries until the callback has returned to avoid a deadlock.
+        setTimeout(() => {
+          if (active) void applySession(session);
+        }, 0);
       }
     );
 
     return () => {
+      active = false;
+      authRequestId += 1;
       subscription.unsubscribe();
     };
   }, []);
