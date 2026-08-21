@@ -28,8 +28,8 @@ export const usePermissions = () => {
     isCompliance,
     isAuditMode,
 
-    // Solo ADMIN puede auditar / impersonar perspectivas
-    canAudit: isSuperAdmin,
+    // ADMIN, GERENTE y SUPERVISOR pueden auditar / impersonar perspectivas
+    canAudit: isSuperAdmin || isManager || isSupervisor,
 
     // Solo ADMIN puede eliminar registros
     canDelete: !isAuditMode && isSuperAdmin,

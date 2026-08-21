@@ -11,21 +11,26 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedId, setSelectedId] = useState("");
 
-  const isSuperAdmin = originalProfile?.role === "SUPERADMIN";
+  const canAudit = originalProfile?.role === "SUPERADMIN" || originalProfile?.role === "MANAGER" || originalProfile?.role === "SUPERVISOR";
   const isImpersonating = Boolean(originalProfile && profile && originalProfile.id !== profile.id);
 
   useEffect(() => {
-    if (isSuperAdmin) {
-      supabase
+    if (canAudit) {
+      let query = supabase
         .from("profiles")
         .select("id,email,first_name,last_name,role,department,team_id,active,last_seen_at,created_at,updated_at")
         .neq("id", originalProfile?.id || "")
-        .eq("active", true)
-        .then(({ data }) => {
-          if (data) setProfiles(data as Profile[]);
-        });
+        .eq("active", true);
+        
+      if (originalProfile?.role !== "SUPERADMIN") {
+        query = query.eq("department", originalProfile?.department || "");
+      }
+
+      query.then(({ data }) => {
+        if (data) setProfiles(data as Profile[]);
+      });
     }
-  }, [isSuperAdmin, originalProfile?.id]);
+  }, [canAudit, originalProfile?.id, originalProfile?.role, originalProfile?.department]);
 
   const handleImpersonateChange = (userId: string) => {
     if (!userId) {
@@ -84,7 +89,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
               </span>
             </div>
 
-            {isSuperAdmin && (
+            {canAudit && (
               <div className="flex items-center gap-2">
                 <Eye className="h-3.5 w-3.5 text-[#D4AF37] hidden sm:inline opacity-70" />
                 <select
