@@ -15,7 +15,7 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 500, 1000];
 
 export const ProspectosList = () => {
   const { profile } = useAuth();
-  const { isSuperAdmin, isManager, isSupervisor, isAgent, canDelete, isRetention, isCompliance, canViewAll, canAssignLeads } = usePermissions();
+  const { isSuperAdmin, isManager, isSupervisor, isAgent, canDelete, isRetention, isCompliance, canViewAll, canAssignLeads, isAuditMode } = usePermissions();
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [agents, setAgents] = useState<Profile[]>([]);
@@ -27,7 +27,7 @@ export const ProspectosList = () => {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterSource, setFilterSource] = useState("");
-  const [filterAgent, setFilterAgent] = useState("");
+  const [filterAgent, setFilterAgent] = useState(isAuditMode ? profile?.id || "" : "");
   const [filterCountry, setFilterCountry] = useState("");
   const deferredSearch = useDeferredValue(search.trim());
 
