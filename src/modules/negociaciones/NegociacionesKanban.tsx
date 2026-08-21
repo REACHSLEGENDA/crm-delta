@@ -323,23 +323,37 @@ export const NegociacionesKanban = () => {
   if (loading) return <div className="app-page grid min-h-[60vh] place-items-center"><div className="text-center"><span className="mx-auto mb-3 block h-9 w-9 animate-spin rounded-full border-2 border-primary border-t-transparent" /><p className="text-sm text-muted-foreground">Cargando pipeline…</p></div></div>;
 
   return (
-    <section className="app-page" aria-labelledby="pipeline-title">
-      <header className="app-page-header">
-        <div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">Operación comercial</p><h1 id="pipeline-title" className="font-title text-2xl font-bold text-foreground sm:text-3xl">Pipeline de negociaciones</h1><p className="mt-1 text-sm text-muted-foreground">Mueve etapas, programa seguimientos y conserva el contexto completo de cada operación.</p></div>
-        {canMutate && <button type="button" onClick={() => openCreateDeal()} className="gold-button-primary inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-sm font-bold"><Plus className="h-4 w-4" /> Nueva negociación</button>}
+    <section className="app-page flex flex-col gap-5" aria-labelledby="pipeline-title">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Operación comercial</p>
+          <h1 id="pipeline-title" className="font-title text-2xl font-extrabold leading-none text-foreground sm:text-[1.9rem]">Pipeline de negociaciones</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Mueve etapas, programa seguimientos y conserva el contexto completo de cada operación.</p>
+        </div>
+        {canMutate && <button type="button" onClick={() => openCreateDeal()} className="gold-button-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold"><Plus className="h-4 w-4" /> Nueva negociación</button>}
       </header>
       {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive"><span>{error}</span><button type="button" onClick={() => setError("")} className="font-semibold underline">Cerrar</button></div>}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Pipeline activo", value: formatCurrency(metrics.pipeline), icon: TrendingUp, tone: "text-primary" },
-          { label: "Ganado", value: formatCurrency(metrics.won), icon: Trophy, tone: "text-emerald-600 dark:text-emerald-400" },
-          { label: "Comisión estimada", value: formatCurrency(metrics.commission), icon: DollarSign, tone: "text-cyan-600 dark:text-cyan-400" },
-          { label: "Operaciones perdidas", value: String(metrics.lost), icon: XCircle, tone: "text-destructive" },
-        ].map((metric) => <div key={metric.label} className="app-panel flex items-center gap-3 p-4"><span className={`grid h-10 w-10 place-items-center rounded-lg bg-muted ${metric.tone}`}><metric.icon className="h-5 w-5" /></span><div><p className="text-xs text-muted-foreground">{metric.label}</p><p className="text-lg font-bold tabular-nums text-foreground">{metric.value}</p></div></div>)}
+          { label: "Pipeline activo", value: formatCurrency(metrics.pipeline), icon: TrendingUp, v: "--primary", text: "text-primary" },
+          { label: "Ganado", value: formatCurrency(metrics.won), icon: Trophy, v: "--success", text: "text-success" },
+          { label: "Comisión estimada", value: formatCurrency(metrics.commission), icon: DollarSign, v: "--electric", text: "text-electric" },
+          { label: "Operaciones perdidas", value: String(metrics.lost), icon: XCircle, v: "--destructive", text: "text-destructive" },
+        ].map((metric) => (
+          <div key={metric.label} className="surface-card surface-lift flex items-start justify-between gap-3 p-[1.15rem]">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{metric.label}</p>
+              <p className={`font-display mt-2 text-[1.7rem] font-extrabold leading-none ${metric.text}`}>{metric.value}</p>
+            </div>
+            <span className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-xl" style={{ background: `color-mix(in srgb, var(${metric.v}) 12%, transparent)`, border: `1px solid color-mix(in srgb, var(${metric.v}) 22%, transparent)` }}>
+              <metric.icon className={`h-[19px] w-[19px] ${metric.text}`} />
+            </span>
+          </div>
+        ))}
       </div>
 
-      <div className="app-panel grid gap-3 p-3 lg:grid-cols-[minmax(240px,1fr)_180px_200px_auto]">
+      <div className="surface-card grid gap-3 p-3 lg:grid-cols-[minmax(240px,1fr)_180px_200px_auto]">
         <label className="relative"><span className="sr-only">Buscar negociación</span><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar negociación, prospecto, teléfono…" className="h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /></label>
         <select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)} aria-label="Filtrar por etapa" className="h-11 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="">Todas las etapas</option>{PIPELINE_STAGES.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select>
         <select value={agentFilter} onChange={(event) => setAgentFilter(event.target.value)} aria-label="Filtrar por agente" className="h-11 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="">Todos los agentes</option>{eligibleAgents.map((agent) => <option key={agent.id} value={agent.id}>{agent.first_name} {agent.last_name}</option>)}</select>
@@ -347,7 +361,7 @@ export const NegociacionesKanban = () => {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="tablist" aria-label="Vista del pipeline" className="inline-flex flex-wrap rounded-xl border border-border bg-card p-1">
+        <div role="tablist" aria-label="Vista del pipeline" className="inline-flex flex-wrap rounded-2xl border border-border bg-card p-1">
           {VIEW_OPTIONS.map((option) => <button key={option.value} type="button" role="tab" aria-selected={viewMode === option.value} onClick={() => setViewMode(option.value)} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition-colors ${viewMode === option.value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}><option.icon className="h-4 w-4" />{option.label}</button>)}
         </div>
         <p className="text-xs text-muted-foreground">{filteredDeals.length} negociaciones · {leadsWithoutDeal.length} prospectos por convertir</p>

@@ -8,6 +8,7 @@ import {
   Edit3, X, Phone, Mail, CheckCircle2, Globe, TrendingUp, MessageSquare,
   ChevronLeft, ChevronRight, Users, Calendar, Megaphone
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { ComplianceDocs } from "./ComplianceDocs";
 
@@ -830,127 +831,115 @@ export const ProspectosList = () => {
 
       {/* Drawer Details Lateral */}
       {isDrawerOpen && selectedLead && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#0D1428] border-l border-[rgba(212,175,55,0.2)] h-full overflow-y-auto p-6 flex flex-col justify-between">
-            <div className="space-y-6">
+        <div
+          className="fixed inset-0 z-50 flex justify-end backdrop-blur-sm"
+          style={{ background: "var(--overlay)" }}
+        >
+          <div className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-border bg-background p-6">
+            <div className="space-y-5">
               {/* Top Drawer Header */}
-              <div className="flex justify-between items-start border-b border-[rgba(212,175,55,0.12)] pb-4">
-                <div>
-                  <h3 className="text-xl font-title font-bold text-[#F8FAFC]">
+              <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
+                <div className="min-w-0">
+                  <h3 className="truncate font-title text-xl font-bold text-foreground">
                     {selectedLead.first_name} {selectedLead.last_name}
                   </h3>
-                  <span className="text-[10px] tracking-wider text-[#D4AF37] uppercase">ID: {selectedLead.id.slice(0,8)}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground font-mono-numbers">
+                    ID: {selectedLead.id.slice(0, 8)}
+                  </span>
                 </div>
-                <button 
+                <button
                   onClick={() => setIsDrawerOpen(false)}
-                  className="p-1 text-[#94A3B8] hover:text-[#F8FAFC] rounded"
+                  className="app-icon-button"
+                  aria-label="Cerrar detalle del prospecto"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
               {/* Contact Information */}
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center gap-3 text-[#94A3B8]">
-                  <Mail className="h-4 w-4 text-[#D4AF37]" />
-                  <span>{selectedLead.email || "Sin email"}</span>
+              <section className="surface-card space-y-4 p-5">
+                <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                  Información de contacto
+                </h4>
+                <div className="space-y-4">
+                  <LeadInfoRow icon={Mail} label="Email" value={selectedLead.email || "Sin email"} />
+                  <LeadInfoRow icon={Phone} label="Teléfono" value={selectedLead.phone || "Sin teléfono"} />
+                  <LeadInfoRow icon={Globe} label="País" value={selectedLead.country || "País no especificado"} />
+                  <LeadInfoRow icon={TrendingUp} label="Capacidad de inversión" value={selectedLead.investment_capacity || "Capacidad no indicada"} />
+                  <LeadInfoRow icon={Tag} label="Fuente" value={selectedLead.source || "Sin fuente"} />
+                  <LeadInfoRow icon={CheckCircle2} label="Estado" value={selectedLead.status} />
+                  {selectedLead.campaign_name && (
+                    <LeadInfoRow icon={Megaphone} label="Campaña" value={selectedLead.campaign_name} />
+                  )}
+                  <LeadInfoRow
+                    icon={Calendar}
+                    label="Registro"
+                    value={new Date(selectedLead.registered_at || selectedLead.created_at).toLocaleDateString("es-MX")}
+                  />
+                  {selectedLead.comments && (
+                    <LeadInfoRow icon={MessageSquare} label="Comentarios" value={selectedLead.comments} />
+                  )}
                 </div>
-                <div className="flex items-center gap-3 text-[#94A3B8]">
-                  <Phone className="h-4 w-4 text-[#D4AF37]" />
-                  <span>{selectedLead.phone || "Sin teléfono"}</span>
-                </div>
-                <div className="flex items-center gap-3 text-[#94A3B8]">
-                  <Globe className="h-4 w-4 text-[#D4AF37]" />
-                  <span>{selectedLead.country || "País no especificado"}</span>
-                </div>
-                <div className="flex items-center gap-3 text-[#94A3B8]">
-                  <TrendingUp className="h-4 w-4 text-[#D4AF37]" />
-                  <span>{selectedLead.investment_capacity || "Capacidad no indicada"}</span>
-                </div>
-                <div className="flex items-center gap-3 text-[#94A3B8]">
-                  <Tag className="h-4 w-4 text-[#D4AF37]" />
-                  <span>Fuente: {selectedLead.source}</span>
-                </div>
-                <div className="flex items-center gap-3 text-[#94A3B8]">
-                  <CheckCircle2 className="h-4 w-4 text-[#D4AF37]" />
-                  <span>Estado: {selectedLead.status}</span>
-                </div>
-                {selectedLead.campaign_name && (
-                  <div className="flex items-center gap-3 text-[#94A3B8]">
-                    <Megaphone className="h-4 w-4 text-[#D4AF37]" />
-                    <span>Campaña: {selectedLead.campaign_name}</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-3 text-[#94A3B8]">
-                  <Calendar className="h-4 w-4 text-[#D4AF37]" />
-                  <span>
-                    Registro: {selectedLead.registered_at 
-                      ? new Date(selectedLead.registered_at).toLocaleDateString('es-MX') 
-                      : new Date(selectedLead.created_at).toLocaleDateString('es-MX')}
-                  </span>
-                </div>
-                {selectedLead.comments && (
-                  <div className="flex items-start gap-3 text-[#94A3B8] mt-1">
-                    <MessageSquare className="h-4 w-4 text-[#D4AF37] shrink-0 mt-0.5" />
-                    <span className="text-xs leading-relaxed">{selectedLead.comments}</span>
-                  </div>
-                )}
-              </div>
+              </section>
 
               {/* Notes Feed */}
-              <div className="space-y-3 pt-4 border-t border-[rgba(212,175,55,0.12)]">
-                <h4 className="text-sm font-title font-semibold text-[#D4AF37]">Notas Comerciales</h4>
+              <section className="surface-card space-y-4 p-5">
+                <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">Notas Comerciales</h4>
                 <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="Agregar nota de la sesión..." 
+                  <input
+                    type="text"
+                    placeholder="Agregar nota de la sesión..."
                     value={newNote}
                     onChange={(e) => setNewNote(e.target.value)}
-                    className="flex-1 px-3 py-1.5 text-xs bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none"
+                    className="h-10 flex-1 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
-                  <button 
+                  <button
                     onClick={handleAddNote}
-                    className="gold-button-primary px-3 text-xs font-semibold rounded"
+                    className="gold-button-primary rounded-lg px-4 text-sm font-semibold"
                   >
                     Guardar
                   </button>
                 </div>
-                
-                <div className="space-y-2 h-40 overflow-y-auto">
+
+                <div className="max-h-40 space-y-2 overflow-y-auto">
                   {notes.length === 0 ? (
-                    <p className="text-[10px] text-[#64748B] text-center pt-4">No hay notas registradas para este lead.</p>
+                    <p className="pt-4 text-center text-xs text-muted-foreground">No hay notas registradas para este lead.</p>
                   ) : (
                     notes.map((note) => (
-                      <div key={note.id} className="p-2.5 bg-[#050814] border border-[rgba(212,175,55,0.1)] rounded text-xs">
-                        <p className="text-[#F8FAFC]">{note.content}</p>
-                        <span className="text-[9px] text-[#64748B] block mt-1">{new Date(note.created_at).toLocaleString()}</span>
+                      <div key={note.id} className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+                        <p className="whitespace-pre-wrap text-foreground">{note.content}</p>
+                        <span className="mt-1 block text-[11px] text-muted-foreground font-mono-numbers">{new Date(note.created_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</span>
                       </div>
                     ))
                   )}
                 </div>
-              </div>
+              </section>
 
               {/* Activity Logs */}
-              <div className="space-y-3 pt-4 border-t border-[rgba(212,175,55,0.12)]">
-                <h4 className="text-sm font-title font-semibold text-[#D4AF37]">Historial de Actividades</h4>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {activities.map((act) => (
-                    <div key={act.id} className="flex gap-2.5 items-start text-xs">
-                      <div className="mt-1 h-2 w-2 rounded-full bg-[#D4AF37]" />
-                      <div>
-                        <p className="text-[#94A3B8]">{act.description}</p>
-                        <span className="text-[9px] text-[#64748B]">{new Date(act.created_at).toLocaleString()}</span>
+              <section className="surface-card space-y-4 p-5">
+                <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Historial de Actividades</h4>
+                <div className="max-h-40 space-y-3 overflow-y-auto">
+                  {activities.length === 0 ? (
+                    <p className="pt-2 text-center text-xs text-muted-foreground">Sin actividad registrada.</p>
+                  ) : (
+                    activities.map((act) => (
+                      <div key={act.id} className="flex items-start gap-3 text-sm">
+                        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
+                        <div className="min-w-0">
+                          <p className="text-foreground">{act.description}</p>
+                          <span className="text-[11px] text-muted-foreground font-mono-numbers">{new Date(act.created_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
-              </div>
-              
+              </section>
+
               {/* Compliance Docs Section (Only for Cumplimiento) */}
               {isCompliance && selectedLead && (
-                <div className="space-y-3 pt-4 border-t border-[rgba(212,175,55,0.12)]">
+                <section className="surface-card space-y-3 p-5">
                   <ComplianceDocs leadId={selectedLead.id} />
-                </div>
+                </section>
               )}
             </div>
           </div>
@@ -1174,3 +1163,15 @@ export const ProspectosList = () => {
     </div>
   );
 };
+
+const LeadInfoRow = ({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) => (
+  <div className="flex items-start gap-3">
+    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+      <Icon className="h-4 w-4" />
+    </span>
+    <div className="min-w-0">
+      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+      <p className="mt-0.5 break-words text-sm leading-relaxed text-foreground">{value}</p>
+    </div>
+  </div>
+);

@@ -74,23 +74,24 @@ export const KanbanView = ({
           onDragOver={(event) => onDragOver(event, stage)}
           onDragLeave={onDragLeave}
           onDrop={(event) => onDrop(event, stage)}
-          className={`flex min-h-64 min-w-0 flex-col rounded-xl border bg-card/70 transition-colors ${isDragTarget ? "border-primary ring-2 ring-primary/20" : "border-border"}`}
+          className={`flex min-h-64 min-w-0 flex-col rounded-2xl border transition-colors ${isDragTarget ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-border/60 bg-background/50"}`}
         >
-          <header className="rounded-t-xl border-b border-border px-3 py-3" style={{ borderTop: `3px solid ${config.color}` }}>
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <h2 className="truncate text-xs font-semibold uppercase tracking-wide" style={{ color: config.color }}>
+          <header className="rounded-t-2xl border-b border-border/60 px-3 py-2.5" style={{ borderTop: `3px solid ${config.color}` }}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: config.color }} />
+                <h2 className="truncate text-[11px] font-bold uppercase tracking-wider" style={{ color: config.color }}>
                   {config.shortLabel}
                 </h2>
-                <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">{formatCurrency(total)}</p>
               </div>
-              <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+              <span className="inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold" style={{ color: config.color, background: `color-mix(in srgb, ${config.color} 14%, transparent)` }}>
                 {stageDeals.length + (showUnlinkedLeads ? leadsWithoutDeal.length : 0)}
               </span>
             </div>
+            <p className="mt-1.5 text-[11px] font-semibold tabular-nums text-muted-foreground">{formatCurrency(total)}</p>
           </header>
 
-          <div className="flex-1 space-y-2 p-2">
+          <div className="flex-1 space-y-2.5 p-2.5">
             {stageDeals.slice(0, 100).map((deal) => {
               const lead = getLead(deal, leads);
               return (
@@ -99,44 +100,50 @@ export const KanbanView = ({
                   draggable
                   onDragStart={(event) => onDragStart(event, deal.id)}
                   onClick={() => onOpenDeal(deal)}
-                  className="group relative cursor-pointer rounded-lg border border-border bg-card p-3 shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+                  className="group relative cursor-pointer rounded-xl border border-border bg-card p-3 shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
                   style={{ borderLeft: `3px solid ${config.color}` }}
                 >
-                  <div className="flex items-start gap-2 pr-14">
-                    <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden="true" />
-                    <div className="min-w-0">
+                  <div className="flex items-start gap-2">
+                    <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground" aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
                       <h3 className="truncate text-sm font-semibold text-foreground">{deal.name}</h3>
-                      <p className="mt-1 text-sm font-bold tabular-nums" style={{ color: config.color }}>
+                      <p className="font-display mt-1 text-[15px] font-bold tabular-nums" style={{ color: config.color }}>
                         {formatCurrency(deal.value, deal.currency)}
                       </p>
                     </div>
                   </div>
-                  <div className="absolute right-2 top-2 flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-                    <button
-                      type="button"
-                      onClick={(event) => { event.stopPropagation(); onEditDeal(deal); }}
-                      className="app-icon-button min-h-8 min-w-8"
-                      aria-label={`Editar ${deal.name}`}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    {canDelete && (
+                  <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border pt-2">
+                    <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                      {lead ? (
+                        <>
+                          <UserRound className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          <span className="truncate">{lead.first_name} {lead.last_name}</span>
+                        </>
+                      ) : (
+                        <span className="italic text-muted-foreground/60">Sin prospecto</span>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 gap-1 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                       <button
                         type="button"
-                        onClick={(event) => { event.stopPropagation(); onDeleteDeal(deal); }}
-                        className="app-icon-button min-h-8 min-w-8 hover:bg-destructive/10 hover:text-destructive"
-                        aria-label={`Eliminar ${deal.name}`}
+                        onClick={(event) => { event.stopPropagation(); onEditDeal(deal); }}
+                        className="app-icon-button min-h-8 min-w-8"
+                        aria-label={`Editar ${deal.name}`}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Pencil className="h-3.5 w-3.5" />
                       </button>
-                    )}
-                  </div>
-                  {lead && (
-                    <div className="mt-3 flex items-center gap-1.5 border-t border-border pt-2 text-[11px] text-muted-foreground">
-                      <UserRound className="h-3 w-3" aria-hidden="true" />
-                      <span className="truncate">{lead.first_name} {lead.last_name}</span>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={(event) => { event.stopPropagation(); onDeleteDeal(deal); }}
+                          className="app-icon-button min-h-8 min-w-8 hover:bg-destructive/10 hover:text-destructive"
+                          aria-label={`Eliminar ${deal.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </article>
               );
             })}

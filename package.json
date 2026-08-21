@@ -27,6 +27,7 @@
     "update-changelog": "gh api 'repos/{owner}/{repo}/releases' --paginate -q '.[] | \"## \\(.tag_name) - \\(.published_at[:10])\\n\\n\\(.body)\\n\"' > CHANGELOG.md"
   },
   "dependencies": {
+    "@emoji-mart/data": "^1.2.1",
     "@fontsource-variable/inter": "^5.2.8",
     "@hello-pangea/dnd": "^18.0.1",
     "@nivo/bar": "^0.99.0",
@@ -59,6 +60,7 @@
     "cmdk": "^1.1.1",
     "diacritic": "^0.0.2",
     "dompurify": "^3.4.0",
+    "emoji-mart": "^5.6.0",
     "faker": "^5.5.3",
     "file-saver": "^2.0.5",
     "inflection": "^3.0.2",

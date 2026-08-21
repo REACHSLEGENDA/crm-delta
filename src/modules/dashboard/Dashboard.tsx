@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  TrendingUp, Users, DollarSign, Award, ArrowUpRight, Clock, ShieldCheck, Zap, XCircle,
+  TrendingUp, Users, Award, Clock, ShieldCheck, Zap, XCircle, Target,
 } from "lucide-react";
 
 const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -14,9 +14,14 @@ const PIPELINE_STAGES = ["Nuevo lead","Contactado","Interesado","Asesoría","Dep
 const STAGE_SHORT: Record<string, string> = {
   "Nuevo lead": "Nuevo","Contactado": "Contactado","Interesado": "Interesado","Asesoría": "Asesoría","Depósito pendiente": "Depósito",
 };
+const STAGE_COLORS = ["var(--stage-new)","var(--stage-contacted)","var(--stage-interested)","var(--stage-advisory)","var(--stage-deposit)"];
 
 interface RevenuePoint { name: string; revenue: number; }
 interface PipelinePoint { stage: string; count: number; }
+
+interface ChartColors { primary: string; axis: string; grid: string; tooltipBg: string; border: string; }
+
+const money = (n: number) => `$${Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 0 })}`;
 
 export const Dashboard = () => {
   const { profile } = useAuth();
@@ -28,14 +33,37 @@ export const Dashboard = () => {
     activeDeals: 0,
     conversionRate: 0,
     projectedRevenue: 0,
-    totalCommissions: 0,   // ← NUEVO: comisiones acumuladas ganadas
-    lostDeposits: 0,        // ← NUEVO: depósitos perdidos
+    totalCommissions: 0,
+    lostDeposits: 0,
     commissionPercentage: 0,
   });
   const [revenueData, setRevenueData] = useState<RevenuePoint[]>([]);
   const [pipelineData, setPipelineData] = useState<PipelinePoint[]>([]);
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Charts render in SVG where CSS variables don't resolve — read the resolved
+  // theme colors and re-read them whenever the light/dark class flips.
+  const [chartColors, setChartColors] = useState<ChartColors>({
+    primary: "#D4AF37", axis: "#94a3b8", grid: "rgba(148,163,184,0.14)", tooltipBg: "#0d1428", border: "rgba(212,175,55,0.2)",
+  });
+  useEffect(() => {
+    const read = () => {
+      const cs = getComputedStyle(document.documentElement);
+      const g = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
+      setChartColors({
+        primary: g("--primary", "#D4AF37"),
+        axis: g("--muted-foreground", "#94a3b8"),
+        grid: g("--border-soft", g("--border", "rgba(148,163,184,0.14)")),
+        tooltipBg: g("--popover", "#0d1428"),
+        border: g("--border", "rgba(212,175,55,0.2)"),
+      });
+    };
+    read();
+    const obs = new MutationObserver(read);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -47,7 +75,7 @@ export const Dashboard = () => {
         .from("activities")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(5);
+        .limit(6);
 
       if (isAgent && profile?.id) {
         leadsQuery = leadsQuery.eq("agent_id", profile.id);
@@ -70,18 +98,14 @@ export const Dashboard = () => {
       const conversionRate = totalDealsCount > 0 ? Math.round((wonDeals.length / totalDealsCount) * 100) : 0;
       const projectedRevenue = dealsData.filter((d) => d.stage !== "Perdido").reduce((sum, d) => sum + Number(d.value || 0), 0);
 
-      // NUEVO: calcular porcentaje de comisión según volumen de deals ganados
       const wonDealsCount = wonDeals.length;
       let commissionPercentage = 0;
       if (wonDealsCount >= 1 && wonDealsCount <= 3) commissionPercentage = 0.10;
       else if (wonDealsCount >= 4 && wonDealsCount <= 6) commissionPercentage = 0.15;
       else if (wonDealsCount >= 7) commissionPercentage = 0.20;
 
-      // NUEVO: sumar capital de deals ganados y aplicar % de comisión
       const totalWonValue = wonDeals.reduce((sum, d) => sum + Number(d.value || 0), 0);
       const totalCommissions = totalWonValue * commissionPercentage;
-      
-      // NUEVO: contar depósitos perdidos
       const lostDeposits = lostDeals.length;
 
       setStats({ totalLeads: leadsCount, activeDeals, conversionRate, projectedRevenue, totalCommissions, lostDeposits, commissionPercentage });
@@ -118,7 +142,6 @@ export const Dashboard = () => {
     if (profile) fetchDashboardData();
   }, [fetchDashboardData, profile]);
 
-  // NUEVO: realtime subscription para cuando un deal cambia a "Ganado"
   useEffect(() => {
     const channel = supabase
       .channel("dashboard_deals_realtime")
@@ -133,230 +156,249 @@ export const Dashboard = () => {
     return (
       <div className="flex h-full items-center justify-center p-20">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 rounded-full border-2 border-[rgba(212,175,55,0.2)] border-t-[#D4AF37] animate-spin" />
-          <span className="text-xs text-[#4A6080] tracking-wider font-medium">Cargando...</span>
+          <div className="h-8 w-8 rounded-full border-2 border-border border-t-primary animate-spin" />
+          <span className="text-xs text-muted-foreground tracking-wider font-medium">Cargando...</span>
         </div>
       </div>
     );
   }
 
+  const commissionTier = stats.commissionPercentage >= 0.20 ? 3 : stats.commissionPercentage >= 0.15 ? 2 : stats.commissionPercentage >= 0.10 ? 1 : 0;
+  const funnelTop = pipelineData.length ? Math.max(pipelineData[0].count, 1) : 1;
+  const noRevenue = revenueData.every((d) => d.revenue === 0);
+  const noPipeline = pipelineData.every((d) => d.count === 0);
+
   return (
-    <div className="app-page">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-[rgba(212,175,55,0.1)]">
+    <div className="app-page flex flex-col gap-4">
+      {/* ===== Command bar ===== */}
+      <header className="rise-in flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <div className="flex items-center gap-2.5 mb-1">
+          <div className="flex items-center gap-2.5 mb-1.5">
             <span className="live-dot" />
-            <span className="text-[10px] font-semibold text-[#22C55E] tracking-[0.18em] uppercase">
-              Monitoreo en Tiempo Real
-            </span>
+            <span className="text-[10px] font-bold text-success tracking-[0.18em] uppercase">Monitoreo en tiempo real</span>
           </div>
-          <h1 className="text-2xl font-title font-bold text-[#F8FAFC] tracking-tight">Sala de Operaciones</h1>
-          <p className="text-xs text-[#4A6080] mt-1 font-medium">Delta Capital &amp; Holding Street</p>
+          <h1 className="font-title text-[clamp(1.6rem,3vw,2.1rem)] font-extrabold text-foreground leading-none">Sala de Operaciones</h1>
+          <p className="text-xs text-muted-foreground mt-2 font-medium">Delta Capital &amp; Holding Street</p>
         </div>
-        <div className="flex items-center gap-2 glass-card px-4 py-2.5 text-xs border-none rounded-xl">
-          <ShieldCheck className="h-3.5 w-3.5 text-[#D4AF37]" />
-          <span className="text-[#6B7FA3]">Acceso Privado:</span>
-          <span className="text-[#D4AF37] font-bold tracking-wider">{profile?.role}</span>
+        <div className="flex items-center gap-2 surface-card px-4 py-2.5 text-xs !rounded-xl">
+          <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+          <span className="text-muted-foreground">Acceso privado</span>
+          <span className="text-primary font-bold tracking-wider">{profile?.role}</span>
         </div>
-      </div>
+      </header>
 
-      {/* KPI Cards — 6 cards (including commissions + lost deposits) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {/* Prospectos */}
-        <div className="glass-card card-accent-electric p-5 flex items-center justify-between gap-4 xl:col-span-1 lg:col-span-1">
-          <div className="space-y-2 min-w-0">
-            <p className="text-[10px] text-[#4A6080] font-semibold tracking-[0.15em] uppercase">Prospectos</p>
-            <h3 className="text-3xl font-mono-numbers font-bold text-[#F8FAFC] leading-none">{stats.totalLeads}</h3>
-            <span className="inline-flex items-center gap-1 text-[10px] text-[#22C55E] font-semibold">
-              <TrendingUp className="h-3 w-3" /> En seguimiento
-            </span>
-          </div>
-          <div className="icon-wrap-electric flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
-            <Users className="h-5 w-5 text-[#00C9FF]" />
-          </div>
-        </div>
+      <div className="market-gradient-line rise-in !rounded-full" />
 
-        {/* Negocios activos */}
-        <div className="glass-card card-accent-gold p-5 flex items-center justify-between gap-4 xl:col-span-1 lg:col-span-1">
-          <div className="space-y-2 min-w-0">
-            <p className="text-[10px] text-[#4A6080] font-semibold tracking-[0.15em] uppercase">Negocios Activos</p>
-            <h3 className="text-3xl font-mono-numbers font-bold text-[#F8FAFC] leading-none">{stats.activeDeals}</h3>
-            <span className="text-[10px] text-[#D4AF37] font-semibold">
-              {stats.activeDeals > 0 ? "En mesa de asesoría" : "Sin negocios abiertos"}
-            </span>
+      {/* ===== Hero band ===== */}
+      <section className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-4">
+        <div
+          className="rise-in surface-card p-6 flex flex-col justify-between gap-6"
+          style={{ background: "radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--primary) 9%, transparent) 0%, transparent 55%), var(--card)" }}
+        >
+          <div>
+            <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-muted-foreground">Capital bajo gestión</p>
+            <h2 className="font-display text-[clamp(2.6rem,6vw,3.9rem)] font-extrabold text-primary leading-[0.92] mt-2">
+              <span className="text-muted-foreground text-[0.5em] font-semibold align-top mr-1">$</span>
+              {stats.projectedRevenue.toLocaleString("es-MX", { minimumFractionDigits: 0 })}
+            </h2>
           </div>
-          <div className="icon-wrap-gold flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
-            <Award className="h-5 w-5 text-[#D4AF37]" />
-          </div>
-        </div>
-
-        {/* Conversión */}
-        <div className="glass-card card-accent-green p-5 flex items-center justify-between gap-4 xl:col-span-1 lg:col-span-1">
-          <div className="space-y-2 min-w-0">
-            <p className="text-[10px] text-[#4A6080] font-semibold tracking-[0.15em] uppercase">Conversión</p>
-            <h3 className="text-3xl font-mono-numbers font-bold text-[#F8FAFC] leading-none">
-              {stats.conversionRate}<span className="text-lg text-[#4A6080]">%</span>
-            </h3>
-            <span className="inline-flex items-center gap-1 text-[10px] text-[#22C55E] font-semibold">
-              <ArrowUpRight className="h-3 w-3" /> Negocios cerrados
-            </span>
-          </div>
-          <div className="icon-wrap-green flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
-            <ArrowUpRight className="h-5 w-5 text-[#22C55E]" />
-          </div>
-        </div>
-
-        {/* Revenue Proyectado */}
-        <div className="glass-card card-accent-violet p-5 flex items-center justify-between gap-4 xl:col-span-1 lg:col-span-1">
-          <div className="space-y-2 min-w-0">
-            <p className="text-[10px] text-[#4A6080] font-semibold tracking-[0.15em] uppercase">Revenue</p>
-            <h3 className="text-xl font-mono-numbers font-bold text-[#D4AF37] leading-none">
-              ${stats.projectedRevenue.toLocaleString("es-MX", { minimumFractionDigits: 0 })}
-            </h3>
-            <span className="text-[10px] text-[#4A6080] font-medium">Capital bajo gestión</span>
-          </div>
-          <div className="icon-wrap-violet flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
-            <DollarSign className="h-5 w-5 text-[#A78BFA]" />
-          </div>
-        </div>
-
-        {/* ✅ NUEVO — Comisiones Ganadas */}
-        <div className="glass-card p-5 flex items-center justify-between gap-4 xl:col-span-1 lg:col-span-1"
-          style={{ border: "1px solid rgba(34,197,94,0.25)", background: "rgba(34,197,94,0.04)" }}>
-          <div className="space-y-2 min-w-0">
-            <p className="text-[10px] text-[#4A6080] font-semibold tracking-[0.15em] uppercase">Comisiones</p>
-            <h3 className="text-xl font-mono-numbers font-bold text-[#22C55E] leading-none">
-              ${stats.totalCommissions.toLocaleString("es-MX", { minimumFractionDigits: 0 })}
-            </h3>
-            <span className="text-[10px] text-[#22C55E] font-semibold">
-              {(stats.commissionPercentage * 100).toFixed(0)}% sobre capital captado
-            </span>
-          </div>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-            style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.25)" }}>
-            <DollarSign className="h-5 w-5 text-[#22C55E]" />
-          </div>
-        </div>
-
-        {/* ✅ NUEVO — Depósitos Perdidos */}
-        <div className="glass-card p-5 flex items-center justify-between gap-4 xl:col-span-1 lg:col-span-1"
-          style={{ border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.04)" }}>
-          <div className="space-y-2 min-w-0">
-            <p className="text-[10px] text-[#4A6080] font-semibold tracking-[0.15em] uppercase">Dep. Perdidos</p>
-            <h3 className="text-3xl font-mono-numbers font-bold text-[#EF4444] leading-none">{stats.lostDeposits}</h3>
-            <span className="text-[10px] text-[#EF4444] font-semibold">Feedback cierre</span>
-          </div>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-            style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)" }}>
-            <XCircle className="h-5 w-5 text-[#EF4444]" />
-          </div>
-        </div>
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="glass-card p-5 lg:col-span-2 space-y-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-[#D4AF37]" />
-              <h3 className="text-sm font-title font-semibold text-[#E2E8F0]">Capital Captado por Mes</h3>
+          <div className="flex items-center gap-8 flex-wrap">
+            <div>
+              <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-muted-foreground">Negocios en mesa</p>
+              <p className="font-display text-xl font-bold text-foreground mt-1">{stats.activeDeals}</p>
             </div>
-            <span className="text-[10px] text-[#4A6080] bg-[rgba(212,175,55,0.06)] border border-[rgba(212,175,55,0.12)] px-2 py-0.5 rounded-md font-medium">Últimos 6 meses</span>
+            <div>
+              <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-muted-foreground">Conversión</p>
+              <p className="font-display text-xl font-bold text-success mt-1">{stats.conversionRate}%</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-muted-foreground">Prospectos</p>
+              <p className="font-display text-xl font-bold text-foreground mt-1">{stats.totalLeads.toLocaleString("es-MX")}</p>
+            </div>
           </div>
-          <div className="h-64">
-            {revenueData.every((d) => d.revenue === 0) ? (
-              <div className="h-full flex flex-col items-center justify-center gap-2">
-                <TrendingUp className="h-8 w-8 text-[#1E2D4A]" />
-                <p className="text-xs text-[#334155]">Sin negocios registrados en este período</p>
-              </div>
+        </div>
+
+        {/* Commission gauge */}
+        <div className="rise-in surface-card p-6 flex flex-col justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-muted-foreground">Comisiones ganadas</p>
+            <p className="font-display text-[2.2rem] font-extrabold text-success leading-none mt-2">{money(stats.totalCommissions)}</p>
+          </div>
+          <div>
+            <div className="flex gap-1.5">
+              {[1, 2, 3].map((seg) => (
+                <div key={seg} className="flex-1 h-1.5 rounded-full overflow-hidden bg-muted">
+                  <div className="h-full rounded-full transition-all duration-500"
+                    style={{ background: seg <= commissionTier ? "linear-gradient(90deg, var(--success), color-mix(in srgb, var(--success) 55%, var(--primary)))" : "transparent" }} />
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2.5">
+              Tramo <b className="text-success">{(stats.commissionPercentage * 100).toFixed(0)}%</b> sobre capital captado
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== KPI rail ===== */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <KpiCard label="Prospectos" value={stats.totalLeads.toLocaleString("es-MX")} tone="electric"
+          foot="En seguimiento activo" footTone="success" icon={<Users />} />
+        <KpiCard label="Negocios activos" value={stats.activeDeals} tone="primary"
+          foot={stats.activeDeals > 0 ? "En mesa de asesoría" : "Sin negocios abiertos"} footTone="primary" icon={<Award />} />
+        <KpiCard label="Conversión" value={<>{stats.conversionRate}<span className="text-[0.55em] text-muted-foreground">%</span></>} tone="success"
+          foot="Negocios cerrados" footTone="success" icon={<Target />} />
+        <KpiCard label="Dep. perdidos" value={stats.lostDeposits} tone="danger"
+          foot="Feedback de cierre" footTone="danger" icon={<XCircle />} />
+      </section>
+
+      {/* ===== Charts ===== */}
+      <section className="grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-4">
+        {/* Area chart */}
+        <div className="rise-in surface-card">
+          <div className="flex justify-between items-center px-6 pt-5 pb-1">
+            <h3 className="font-title text-sm font-bold text-foreground flex items-center gap-2">
+              <Zap className="h-4 w-4 text-primary" /> Capital captado por mes
+            </h3>
+            <span className="text-[10px] text-muted-foreground border border-border px-2 py-0.5 rounded-md font-semibold">Últimos 6 meses</span>
+          </div>
+          <div className="h-64 px-3 pb-4">
+            {noRevenue ? (
+              <EmptyState icon={<TrendingUp className="h-8 w-8" />} text="Sin negocios registrados en este período" />
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={revenueData}>
+                <AreaChart data={revenueData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
+                      <stop offset="5%" stopColor={chartColors.primary} stopOpacity={0.32} />
+                      <stop offset="95%" stopColor={chartColors.primary} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                  <XAxis dataKey="name" stroke="#334155" tick={{ fill: "#4A6080", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis stroke="#334155" tick={{ fill: "#4A6080", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
+                  <XAxis dataKey="name" stroke={chartColors.axis} tick={{ fill: chartColors.axis, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis stroke={chartColors.axis} tick={{ fill: chartColors.axis, fontSize: 11 }} axisLine={false} tickLine={false} width={48}
+                    tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: "rgba(8,15,32,0.95)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: "0.625rem", color: "#F8FAFC" }}
-                    formatter={(val) => [`$${Number(val ?? 0).toLocaleString("es-MX")}`, "Capital"]}
+                    contentStyle={{ backgroundColor: chartColors.tooltipBg, border: `1px solid ${chartColors.border}`, borderRadius: "0.75rem", color: chartColors.axis, fontSize: "12px" }}
+                    labelStyle={{ color: chartColors.primary, fontWeight: 700 }}
+                    formatter={(val) => [money(Number(val ?? 0)), "Capital"]}
                   />
-                  <Area type="monotone" dataKey="revenue" stroke="#D4AF37" fillOpacity={1} fill="url(#colorRevenue)" strokeWidth={1.5} dot={false} activeDot={{ r: 4, fill: "#D4AF37" }} />
+                  <Area type="monotone" dataKey="revenue" stroke={chartColors.primary} strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" dot={false} activeDot={{ r: 4, fill: chartColors.primary }} />
                 </AreaChart>
               </ResponsiveContainer>
             )}
           </div>
         </div>
 
-        <div className="glass-card p-5 space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-title font-semibold text-[#E2E8F0]">Embudo Comercial</h3>
-            <span className="text-[10px] text-[#4A6080] bg-[rgba(212,175,55,0.06)] border border-[rgba(212,175,55,0.12)] px-2 py-0.5 rounded-md font-medium">Distribución</span>
+        {/* Funnel */}
+        <div className="rise-in surface-card">
+          <div className="flex justify-between items-center px-6 pt-5 pb-1">
+            <h3 className="font-title text-sm font-bold text-foreground">Embudo comercial</h3>
+            <span className="text-[10px] text-muted-foreground border border-border px-2 py-0.5 rounded-md font-semibold">Distribución</span>
           </div>
-          <div className="h-64">
-            {pipelineData.every((d) => d.count === 0) ? (
-              <div className="h-full flex flex-col items-center justify-center gap-2">
-                <Award className="h-8 w-8 text-[#1E2D4A]" />
-                <p className="text-xs text-[#334155]">Sin negocios en el embudo</p>
-              </div>
+          <div className="px-6 py-4 flex flex-col gap-3">
+            {noPipeline ? (
+              <EmptyState icon={<Award className="h-8 w-8" />} text="Sin negocios en el embudo" />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={pipelineData} barSize={18}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                  <XAxis dataKey="stage" stroke="#334155" tick={{ fill: "#4A6080", fontSize: 9 }} axisLine={false} tickLine={false} />
-                  <YAxis stroke="#334155" tick={{ fill: "#4A6080", fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: "rgba(8,15,32,0.95)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: "0.625rem", color: "#F8FAFC" }}
-                    formatter={(val) => [Number(val ?? 0), "Negocios"]}
-                  />
-                  <Bar dataKey="count" fill="#00C9FF" radius={[4, 4, 0, 0]} fillOpacity={0.85} />
-                </BarChart>
-              </ResponsiveContainer>
+              pipelineData.map((s, i) => {
+                const pct = Math.round((s.count / funnelTop) * 100);
+                const conv = i === 0 ? 100 : pipelineData[i - 1].count > 0 ? Math.round((s.count / pipelineData[i - 1].count) * 100) : 0;
+                const color = STAGE_COLORS[i] ?? "var(--primary)";
+                return (
+                  <div key={s.stage} className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-foreground font-semibold flex items-center gap-2">
+                        <i className="w-2 h-2 rounded-sm inline-block" style={{ background: color }} />{s.stage}
+                      </span>
+                      <span className="font-display font-bold text-foreground">
+                        {s.count}<span className="text-muted-foreground font-medium ml-1.5">{conv}%</span>
+                      </span>
+                    </div>
+                    <div className="h-3 rounded-md bg-muted overflow-hidden">
+                      <div className="h-full rounded-md transition-[width] duration-700 ease-out"
+                        style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}, color-mix(in srgb, ${color} 55%, transparent))` }} />
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ✅ Bitácora de Actividad — solo visible para MANAGER y SUPERADMIN */}
+      {/* ===== Activity feed ===== */}
       {canSeeActivityLog && (
-        <div className="glass-card p-5">
-          <div className="flex items-center gap-2.5 mb-5">
-            <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-[rgba(212,175,55,0.08)] border border-[rgba(212,175,55,0.15)]">
-              <Clock className="h-3.5 w-3.5 text-[#D4AF37]" />
-            </div>
-            <h3 className="text-sm font-title font-semibold text-[#E2E8F0]">Bitácora de Actividad</h3>
-            <div className="ml-auto flex items-center gap-1.5">
+        <section className="rise-in surface-card">
+          <div className="flex items-center gap-2.5 px-6 pt-5 pb-1">
+            <Clock className="h-4 w-4 text-primary" />
+            <h3 className="font-title text-sm font-bold text-foreground">Bitácora de actividad</h3>
+            <span className="ml-auto flex items-center gap-1.5">
               <span className="live-dot" />
-              <span className="text-[9px] text-[#22C55E] font-semibold tracking-wider">LIVE</span>
-            </div>
+              <span className="text-[9px] text-success font-bold tracking-[0.14em]">LIVE</span>
+            </span>
           </div>
-
-          <div className="divide-y divide-[rgba(255,255,255,0.04)]">
+          <div className="px-3 py-2">
             {recentActivities.length === 0 ? (
-              <p className="text-xs text-[#4A6080] py-6 text-center">No se registran actividades recientes.</p>
+              <p className="text-xs text-muted-foreground py-6 text-center">No se registran actividades recientes.</p>
             ) : (
               recentActivities.map((act) => (
-                <div key={act.id} className="py-3 flex justify-between items-center gap-4 table-row-hover group">
+                <div key={act.id} className="table-row-hover flex justify-between items-center gap-4 px-3 py-3 rounded-lg border-l-2 border-transparent">
                   <div className="min-w-0">
-                    <p className="text-sm text-[#CBD5E1] truncate">{act.description}</p>
-                    <span className="text-[10px] text-[#334155] font-mono-numbers mt-0.5 block">
+                    <p className="text-sm text-foreground/90 truncate">{act.description}</p>
+                    <span className="text-[10px] text-muted-foreground font-mono-numbers mt-0.5 block">
                       {new Date(act.created_at).toLocaleString("es-MX")}
                     </span>
                   </div>
-                  <span className="shrink-0 px-2 py-0.5 text-[9px] font-bold tracking-[0.15em] rounded-md border border-[rgba(212,175,55,0.15)] bg-[rgba(212,175,55,0.04)] text-[#D4AF37] uppercase">
+                  <span className="shrink-0 px-2 py-0.5 text-[9px] font-bold tracking-[0.12em] rounded-md border border-border bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] text-primary uppercase">
                     {act.type}
                   </span>
                 </div>
               ))
             )}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );
 };
+
+/* ---------- Sub-components ---------- */
+
+type Tone = "electric" | "primary" | "success" | "danger";
+const TONE_TEXT: Record<Tone, string> = { electric: "text-electric", primary: "text-primary", success: "text-success", danger: "text-destructive" };
+const TONE_VAR: Record<Tone, string> = { electric: "--electric", primary: "--primary", success: "--success", danger: "--destructive" };
+
+interface KpiCardProps {
+  label: string;
+  value: ReactNode;
+  tone: Tone;
+  foot: string;
+  footTone: Tone;
+  icon: ReactNode;
+}
+
+function KpiCard({ label, value, tone, foot, footTone, icon }: KpiCardProps) {
+  const v = TONE_VAR[tone];
+  return (
+    <div className="surface-card surface-lift rise-in p-[1.15rem] flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-muted-foreground">{label}</p>
+        <p className={`font-display text-[2.1rem] font-extrabold leading-none my-2 ${TONE_TEXT[tone]}`}>{value}</p>
+        <p className={`text-[10.5px] font-semibold inline-flex items-center gap-1 ${TONE_TEXT[footTone]}`}>{foot}</p>
+      </div>
+      <div className="w-[38px] h-[38px] rounded-xl grid place-items-center shrink-0 [&_svg]:w-[19px] [&_svg]:h-[19px]"
+        style={{ background: `color-mix(in srgb, var(${v}) 12%, transparent)`, border: `1px solid color-mix(in srgb, var(${v}) 22%, transparent)` }}>
+        <span className={TONE_TEXT[tone]}>{icon}</span>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ icon, text }: { icon: ReactNode; text: string }) {
+  return (
+    <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground/50">
+      {icon}
+      <p className="text-xs">{text}</p>
+    </div>
+  );
+}

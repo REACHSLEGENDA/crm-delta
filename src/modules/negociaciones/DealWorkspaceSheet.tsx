@@ -164,37 +164,37 @@ export const DealWorkspaceSheet = ({
 
         <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(280px,0.82fr)_minmax(430px,1.35fr)] lg:overflow-hidden">
           <aside className="space-y-4 border-b border-border p-4 lg:overflow-y-auto lg:border-b-0 lg:border-r">
-            <section className="app-panel p-4">
+            <section className="surface-card p-5">
               <div className="mb-4 flex items-center justify-between gap-2">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sobre la negociación</h2>
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Sobre la negociación</h2>
                 <span className="rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary">{STAGE_CONFIG[currentStage].label}</span>
               </div>
               <dl className="space-y-4">
                 <div>
-                  <dt className="text-xs text-muted-foreground">Capital</dt>
-                  <dd className="mt-1 font-title text-3xl font-semibold tabular-nums">{formatCurrency(deal.value, deal.currency)}</dd>
+                  <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Capital</dt>
+                  <dd className="mt-1 font-display text-3xl font-semibold">{formatCurrency(deal.value, deal.currency)}</dd>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <dt className="text-xs text-muted-foreground">Creada</dt>
-                    <dd className="mt-1 text-sm font-medium">{new Date(deal.created_at).toLocaleDateString("es-MX")}</dd>
+                    <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Creada</dt>
+                    <dd className="mt-1 text-sm font-medium font-mono-numbers">{new Date(deal.created_at).toLocaleDateString("es-MX")}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground">Cierre previsto</dt>
-                    <dd className="mt-1 text-sm font-medium">{deal.expected_closing_date ? new Date(`${deal.expected_closing_date}T12:00:00`).toLocaleDateString("es-MX") : "Sin fecha"}</dd>
+                    <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Cierre previsto</dt>
+                    <dd className="mt-1 text-sm font-medium font-mono-numbers">{deal.expected_closing_date ? new Date(`${deal.expected_closing_date}T12:00:00`).toLocaleDateString("es-MX") : "Sin fecha"}</dd>
                   </div>
                 </div>
                 {deal.loss_reason && (
                   <div>
-                    <dt className="text-xs text-muted-foreground">Motivo de pérdida</dt>
+                    <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Motivo de pérdida</dt>
                     <dd className="mt-1 text-sm font-medium text-destructive">{deal.loss_reason}</dd>
                   </div>
                 )}
               </dl>
             </section>
 
-            <section className="app-panel p-4">
-              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prospecto</h2>
+            <section className="surface-card p-5">
+              <h2 className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Prospecto</h2>
               {lead ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
@@ -212,8 +212,8 @@ export const DealWorkspaceSheet = ({
               )}
             </section>
 
-            <section className="app-panel p-4">
-              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Responsable</h2>
+            <section className="surface-card p-5">
+              <h2 className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Responsable</h2>
               {agent ? (
                 <div className="flex items-center gap-3">
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-xs font-bold text-secondary-foreground">{agent.first_name?.[0]}{agent.last_name?.[0]}</span>
@@ -234,7 +234,7 @@ export const DealWorkspaceSheet = ({
               </TabsList>
 
               <TabsContent value="activity">
-                <form onSubmit={submitActivity} className="app-panel space-y-4 p-4">
+                <form onSubmit={submitActivity} className="surface-card space-y-4 p-5">
                   <div>
                     <label htmlFor="activity-title" className="mb-1.5 block text-xs font-semibold">Actividad</label>
                     <Input id="activity-title" value={activityDraft.title} onChange={(event) => setActivityDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Ej. Comunicarse con el cliente" />
@@ -269,7 +269,7 @@ export const DealWorkspaceSheet = ({
               </TabsContent>
 
               <TabsContent value="comment">
-                <form onSubmit={submitNote} className="app-panel space-y-4 p-4">
+                <form onSubmit={submitNote} className="surface-card space-y-4 p-5">
                   <div>
                     <label htmlFor="deal-comment" className="mb-1.5 block text-xs font-semibold">Comentario de seguimiento</label>
                     <Textarea id="deal-comment" value={noteContent} onChange={(event) => setNoteContent(event.target.value)} className="min-h-32" placeholder="Registra acuerdos, objeciones, perfil del cliente o próximos pasos" />
@@ -296,7 +296,7 @@ export const DealWorkspaceSheet = ({
 
             <div className="my-5 flex items-center gap-3">
               <div className="h-px flex-1 bg-border" />
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Historial</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Historial</span>
               <div className="h-px flex-1 bg-border" />
             </div>
 

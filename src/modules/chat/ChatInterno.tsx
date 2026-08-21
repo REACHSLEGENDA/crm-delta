@@ -10,6 +10,7 @@ import {
   Plus,
   Send,
   Smile,
+  Sticker,
   Trash2,
   UserRound,
   X,
@@ -28,6 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { EmojiPicker } from "./EmojiPicker";
 
 const DEFAULT_CHANNELS: Array<{ name: string; type: ChannelType }> = [
   { name: "Ventas", type: "ventas" },
@@ -35,10 +37,17 @@ const DEFAULT_CHANNELS: Array<{ name: string; type: ChannelType }> = [
   { name: "Retention", type: "general" },
   { name: "Líderes", type: "alertas" },
 ];
-const EMOJIS = ["👍", "✅", "🎯", "📞", "💬", "🔥", "👏", "🤝", "🚀", "💰", "😊", "🙏"];
+const STICKERS = ["🎉", "🔥", "💯", "👏", "🚀", "🤝", "💰", "📈", "✅", "🙌", "😎", "🥳", "👀", "💪", "⭐", "🏆", "📞", "💬", "🫡", "🤑", "👍", "🙏", "😂", "❤️"];
 
 const fullName = (profile?: Pick<Profile, "first_name" | "last_name" | "email">) =>
   profile ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || profile.email : "Usuario";
+
+// A short message made only of emoji renders as a large "sticker", chat-style.
+const isEmojiOnly = (text: string) => {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length > 12 || /[0-9a-zA-Z]/.test(trimmed)) return false;
+  return /\p{Extended_Pictographic}/u.test(trimmed);
+};
 
 const AttachmentPreview = ({ attachment }: { attachment: FileAttachment }) => {
   const [url, setUrl] = useState(attachment.url ?? "");
@@ -77,6 +86,7 @@ export const ChatInterno = () => {
   const [gifUrl, setGifUrl] = useState("");
   const [showGifInput, setShowGifInput] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showStickers, setShowStickers] = useState(false);
   const [mobileChannelsOpen, setMobileChannelsOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -182,7 +192,7 @@ export const ChatInterno = () => {
         created_at: new Date().toISOString(), profiles: profile,
       };
       setMessages((current) => [...current, optimistic]);
-      setInputMessage(""); setPendingFiles([]); setGifUrl(""); setShowGifInput(false); setShowEmojiPicker(false);
+      setInputMessage(""); setPendingFiles([]); setGifUrl(""); setShowGifInput(false); setShowEmojiPicker(false); setShowStickers(false);
       window.setTimeout(scrollToBottom, 30);
       const { data, error: sendError } = await supabase.from("messages").insert({
         channel_id: selectedChannel.id, user_id: profile.id,
@@ -197,6 +207,25 @@ export const ChatInterno = () => {
     } finally {
       setSending(false);
     }
+  };
+
+  const sendSticker = async (emoji: string) => {
+    if (!profile?.id || !selectedChannel || isAuditMode || sending) return;
+    setShowStickers(false);
+    setSending(true); setError("");
+    const tempId = crypto.randomUUID();
+    const optimistic: Message = {
+      id: tempId, channel_id: selectedChannel.id, user_id: profile.id,
+      content: emoji, attachments: [], created_at: new Date().toISOString(), profiles: profile,
+    };
+    setMessages((current) => [...current, optimistic]);
+    window.setTimeout(scrollToBottom, 30);
+    const { data, error: sendError } = await supabase.from("messages").insert({
+      channel_id: selectedChannel.id, user_id: profile.id, content: emoji, attachments: [],
+    }).select().single();
+    if (sendError) { setError(sendError.message); await fetchMessages(selectedChannel.id); }
+    else setMessages((current) => current.map((message) => message.id === tempId ? { ...message, id: data.id } : message));
+    setSending(false);
   };
 
   const deleteChannel = async () => {
@@ -252,15 +281,20 @@ export const ChatInterno = () => {
               <div className="flex-1 space-y-4 overflow-y-auto p-3 sm:p-5">
                 {messages.map((message) => {
                   const own = message.user_id === profile?.id;
+                  const sticker = isEmojiOnly(message.content ?? "") && (!message.attachments || message.attachments.length === 0);
                   return (
                     <article key={message.id} className={`flex max-w-[92%] items-start gap-2.5 sm:max-w-[78%] ${own ? "ml-auto flex-row-reverse" : ""}`}>
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary"><UserRound className="h-4 w-4" /></span>
                       <div className={`min-w-0 ${own ? "text-right" : ""}`}>
                         <p className="mb-1 text-[10px] text-muted-foreground"><span className="font-semibold">{fullName(message.profiles)}</span> · {new Date(message.created_at).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</p>
-                        <div className={`rounded-xl px-3 py-2 text-left text-sm leading-relaxed ${own ? "rounded-tr-sm bg-primary text-primary-foreground" : "rounded-tl-sm border border-border bg-card text-foreground"}`}>
-                          {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
-                          {message.attachments && message.attachments.length > 0 && <div className={`grid gap-2 ${message.content ? "mt-2" : ""}`}>{message.attachments.map((attachment) => <AttachmentPreview key={`${attachment.path}-${attachment.url ?? ""}`} attachment={attachment} />)}</div>}
-                        </div>
+                        {sticker ? (
+                          <p className={`text-[2.75rem] leading-none ${own ? "text-right" : ""}`}>{message.content}</p>
+                        ) : (
+                          <div className={`rounded-xl px-3 py-2 text-left text-sm leading-relaxed ${own ? "rounded-tr-sm bg-primary text-primary-foreground" : "rounded-tl-sm border border-border bg-card text-foreground"}`}>
+                            {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
+                            {message.attachments && message.attachments.length > 0 && <div className={`grid gap-2 ${message.content ? "mt-2" : ""}`}>{message.attachments.map((attachment) => <AttachmentPreview key={`${attachment.path}-${attachment.url ?? ""}`} attachment={attachment} />)}</div>}
+                          </div>
+                        )}
                       </div>
                     </article>
                   );
@@ -269,14 +303,29 @@ export const ChatInterno = () => {
                 <div ref={messagesEndRef} />
               </div>
 
-              {!isAuditMode && <form onSubmit={sendMessage} className="border-t border-border bg-card p-3 sm:p-4">
+              {!isAuditMode && <form onSubmit={sendMessage} className="relative border-t border-border bg-card p-3 sm:p-4">
                 {pendingFiles.length > 0 && <div className="mb-2 flex flex-wrap gap-2">{pendingFiles.map((file, index) => <span key={`${file.name}-${index}`} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-muted px-2.5 text-xs"><Paperclip className="h-3.5 w-3.5 text-primary" /><span className="max-w-40 truncate">{file.name}</span><button type="button" onClick={() => setPendingFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Quitar ${file.name}`}><X className="h-3.5 w-3.5" /></button></span>)}</div>}
                 {showGifInput && <div className="mb-2 flex gap-2"><input value={gifUrl} onChange={(event) => setGifUrl(event.target.value)} placeholder="Pega una URL https:// de GIF" className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /><button type="button" onClick={() => { setShowGifInput(false); setGifUrl(""); }} className="app-icon-button" aria-label="Quitar GIF"><X className="h-4 w-4" /></button></div>}
-                {showEmojiPicker && <div className="mb-2 flex flex-wrap gap-1 rounded-lg border border-border bg-background p-2">{EMOJIS.map((emoji) => <button key={emoji} type="button" onClick={() => setInputMessage((current) => `${current}${emoji}`)} className="grid h-10 w-10 place-items-center rounded-lg text-lg hover:bg-accent" aria-label={`Agregar ${emoji}`}>{emoji}</button>)}</div>}
+                {showEmojiPicker && (
+                  <div className="absolute bottom-full left-2 z-40 mb-2 shadow-2xl">
+                    <EmojiPicker onSelect={(emoji) => setInputMessage((current) => `${current}${emoji}`)} />
+                  </div>
+                )}
+                {showStickers && (
+                  <div className="absolute bottom-full left-2 z-40 mb-2 w-[min(20rem,90vw)] rounded-xl border border-border bg-popover p-2 shadow-2xl">
+                    <p className="px-1 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Stickers</p>
+                    <div className="grid grid-cols-6 gap-1">
+                      {STICKERS.map((emoji) => (
+                        <button key={emoji} type="button" onClick={() => void sendSticker(emoji)} className="grid h-11 w-11 place-items-center rounded-lg text-2xl transition-transform hover:scale-110 hover:bg-accent" aria-label={`Enviar sticker ${emoji}`}>{emoji}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-end gap-2">
                   <div className="flex gap-1">
                     <label className="app-icon-button cursor-pointer" aria-label="Adjuntar archivos"><Paperclip className="h-4 w-4" /><input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="sr-only" onChange={(event) => setPendingFiles((current) => [...current, ...Array.from(event.target.files ?? [])])} /></label>
-                    <button type="button" onClick={() => setShowEmojiPicker((value) => !value)} className="app-icon-button" aria-label="Agregar emoji"><Smile className="h-4 w-4" /></button>
+                    <button type="button" onClick={() => { setShowEmojiPicker((value) => !value); setShowStickers(false); }} className={`app-icon-button ${showEmojiPicker ? "bg-accent text-primary" : ""}`} aria-label="Agregar emoji"><Smile className="h-4 w-4" /></button>
+                    <button type="button" onClick={() => { setShowStickers((value) => !value); setShowEmojiPicker(false); }} className={`app-icon-button ${showStickers ? "bg-accent text-primary" : ""}`} aria-label="Enviar sticker"><Sticker className="h-4 w-4" /></button>
                     <button type="button" onClick={() => setShowGifInput((value) => !value)} className="app-icon-button" aria-label="Agregar GIF"><ImageIcon className="h-4 w-4" /></button>
                   </div>
                   <textarea rows={1} value={inputMessage} onChange={(event) => setInputMessage(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder={`Mensaje en ${selectedChannel.name}`} className="min-h-11 max-h-32 min-w-0 flex-1 resize-y rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
