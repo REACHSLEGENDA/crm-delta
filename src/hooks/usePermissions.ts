@@ -47,7 +47,7 @@ export const usePermissions = () => {
     canCreateUsers: !isAuditMode && (isSuperAdmin || isManager),
 
     // Modificar cualquier lead — ADMIN + GERENTE (o si el auditor original lo es)
-    canEditAll: isSuperAdmin || isManager || (isAuditMode && (originalProfile?.role === "SUPERADMIN" || originalProfile?.role === "MANAGER")),
+    canEditAll: isSuperAdmin || isManager || (isAuditMode && (originalProfile?.role === "SUPERADMIN" || originalProfile?.role === "MANAGER" || originalProfile?.role === "SUPERVISOR")),
 
     // Ver todos los leads (sin filtro de equipo/agente) — ADMIN + GERENTE + SUPERVISOR (o si el auditor original lo es)
     canViewAll: isSuperAdmin || isManager || isSupervisor || (isAuditMode && (originalProfile?.role === "SUPERADMIN" || originalProfile?.role === "MANAGER" || originalProfile?.role === "SUPERVISOR")),
