@@ -15,7 +15,7 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 500, 1000];
 
 export const ProspectosList = () => {
   const { profile } = useAuth();
-  const { isSuperAdmin, isManager, isSupervisor, isAgent, canDelete, isRetention, isCompliance, canViewAll, canAssignLeads, isAuditMode } = usePermissions();
+  const { isAgent, isSupervisor, isManager, isSuperAdmin, canDelete, isRetention, isCompliance, canViewAll, canAssignLeads, isAuditMode } = usePermissions();
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [agents, setAgents] = useState<Profile[]>([]);
@@ -29,6 +29,7 @@ export const ProspectosList = () => {
   const [filterSource, setFilterSource] = useState("");
   const [filterAgent, setFilterAgent] = useState(isAuditMode ? profile?.id || "" : "");
   const [filterCountry, setFilterCountry] = useState("");
+  const [filterContactOutcome, setFilterContactOutcome] = useState("");
   const deferredSearch = useDeferredValue(search.trim());
 
   // ✅ NUEVO: Paginación
@@ -39,6 +40,8 @@ export const ProspectosList = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAgentId, setBulkAgentId] = useState("");
   const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [bulkContactOutcome, setBulkContactOutcome] = useState("");
+  const [bulkOutcomeUpdating, setBulkOutcomeUpdating] = useState(false);
 
   // Drawer / Form state
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -55,6 +58,7 @@ export const ProspectosList = () => {
     status: "Nuevo",
     source: "Web",
     agent_id: "",
+    contact_outcome: "pending",
   });
 
   // Notes & Activity state inside drawer
@@ -71,6 +75,7 @@ export const ProspectosList = () => {
       let query = supabase
         .from("leads")
         .select("*", { count: "exact" })
+        .eq("is_burned", false)
         .order("created_at", { ascending: false });
 
       if (canViewAll) {
@@ -89,6 +94,7 @@ export const ProspectosList = () => {
       }
       if (filterSource) query = query.eq("source", filterSource);
       if (filterCountry) query = query.eq("country", filterCountry);
+      if (filterContactOutcome) query = query.eq("contact_outcome", filterContactOutcome);
 
       const searchTerm = deferredSearch.replace(/[,%()]/g, " ").trim();
       if (searchTerm) {
@@ -121,6 +127,7 @@ export const ProspectosList = () => {
     deferredSearch,
     filterAgent,
     filterCountry,
+    filterContactOutcome,
     filterSource,
     filterStatus,
     isAgent,
@@ -128,18 +135,32 @@ export const ProspectosList = () => {
     profile,
   ]);
 
-  const fetchAgents = async () => {
+  const fetchAgents = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("profiles")
         .select("*");
       if (!error && data) {
-        setAgents(data as Profile[]);
+        const scopedAgents = (data as Profile[]).filter((agent) => {
+          if (agent.role !== "AGENT") return false;
+          if (isSuperAdmin) return true;
+          if (isManager) return agent.department === profile?.department;
+          if (isSupervisor) return Boolean(profile?.team_id && agent.team_id === profile.team_id);
+          return agent.id === profile?.id;
+        });
+        setAgents(scopedAgents);
       }
     } catch (err) {
       console.error("Error fetching agents:", err);
     }
-  };
+  }, [
+    isManager,
+    isSuperAdmin,
+    isSupervisor,
+    profile?.department,
+    profile?.id,
+    profile?.team_id,
+  ]);
 
   useEffect(() => {
     fetchLeads();
@@ -147,7 +168,7 @@ export const ProspectosList = () => {
 
   useEffect(() => {
     if (profile) fetchAgents();
-  }, [profile]);
+  }, [fetchAgents, profile]);
 
   // Handle drawer load detail
   const handleOpenLeadDetails = async (lead: Lead) => {
@@ -304,7 +325,8 @@ export const ProspectosList = () => {
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -330,6 +352,8 @@ export const ProspectosList = () => {
         setSelectedIds(new Set());
         setBulkAgentId("");
         fetchLeads();
+      } else {
+        setLoadError(error.message);
       }
     } catch (err) { console.error(err); }
     finally { setBulkAssigning(false); }
@@ -356,10 +380,27 @@ export const ProspectosList = () => {
     finally { setBulkStatusUpdating(false); }
   };
 
+  const handleBulkOutcomeUpdate = async () => {
+    if (!bulkContactOutcome || selectedIds.size === 0) return;
+    setBulkOutcomeUpdating(true);
+    const { error } = await supabase
+      .from("leads")
+      .update({ contact_outcome: bulkContactOutcome })
+      .in("id", Array.from(selectedIds));
+    setBulkOutcomeUpdating(false);
+    if (error) {
+      setLoadError(error.message);
+      return;
+    }
+    setSelectedIds(new Set());
+    setBulkContactOutcome("");
+    void fetchLeads();
+  };
+
   return (
-    <div className="space-y-6 p-6 bg-[#050814] min-h-screen text-[#F8FAFC]">
+    <div className="app-page">
       {/* Header */}
-      <div className="flex justify-between items-center border-b border-[rgba(212,175,55,0.15)] pb-4">
+      <div className="flex flex-col items-start justify-between gap-4 border-b border-border pb-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-title font-bold text-[#F8FAFC]">Mesa de Prospectos</h1>
           <p className="text-xs text-[#94A3B8] mt-1">Gestión institucional de leads de inversión y trading</p>
@@ -377,11 +418,12 @@ export const ProspectosList = () => {
               status: "Nuevo",
               source: "Web",
               agent_id: profile?.id || "",
+              contact_outcome: "pending",
             });
             setSelectedLead(null);
             setIsFormOpen(true);
           }}
-          className="gold-button-primary flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded"
+          className="gold-button-primary flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold sm:w-auto"
         >
           <Plus className="h-4 w-4" />
           <span>Agregar Prospecto</span>
@@ -389,7 +431,7 @@ export const ProspectosList = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 glass-card">
+      <div className="grid grid-cols-1 gap-3 p-4 glass-card md:grid-cols-2 xl:grid-cols-7">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#64748B]" />
           <input 
@@ -414,6 +456,20 @@ export const ProspectosList = () => {
             <option value="Depósito pendiente">Depósito pendiente</option>
             <option value="Ganado">Ganado</option>
             <option value="Perdido">Perdido</option>
+          </select>
+        </div>
+        <div>
+          <select
+            value={filterContactOutcome}
+            onChange={(e) => { setFilterContactOutcome(e.target.value); setCurrentPage(1); }}
+            aria-label="Filtrar por resultado telefónico"
+            className="h-10 w-full rounded border border-border bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="">-- Todos los números --</option>
+            <option value="invalid_number">Número inexistente</option>
+            <option value="direct_voicemail">Buzón directo</option>
+            <option value="valid">Número válido</option>
+            <option value="pending">Sin clasificar</option>
           </select>
         </div>
         <div>
@@ -461,6 +517,7 @@ export const ProspectosList = () => {
             setFilterCountry("");
             setFilterSource("");
             setFilterAgent("");
+            setFilterContactOutcome("");
             setCurrentPage(1);
             setSelectedIds(new Set());
           }}
@@ -473,11 +530,11 @@ export const ProspectosList = () => {
       {/* ✅ NUEVO: Barra de acciones masivas */}
       {selectedIds.size > 0 && (
 
-        <div className="flex items-center gap-3 p-3 rounded-lg"
+        <div className="flex flex-wrap items-center gap-3 rounded-lg p-3"
           style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.25)" }}>
           <Users className="h-4 w-4 text-[#D4AF37]" />
           <span className="text-xs font-semibold text-[#D4AF37]">{selectedIds.size} seleccionados</span>
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             {canAssignLeads && (
               <>
                 <select
@@ -522,6 +579,28 @@ export const ProspectosList = () => {
                 {bulkStatusUpdating ? "Actualizando..." : "Actualizar"}
               </button>
             </>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={bulkContactOutcome}
+                onChange={(event) => setBulkContactOutcome(event.target.value)}
+                aria-label="Clasificar números seleccionados"
+                className="h-9 rounded border border-border bg-background px-2 text-xs text-foreground"
+              >
+                <option value="">Clasificar número…</option>
+                <option value="invalid_number">Número inexistente</option>
+                <option value="direct_voicemail">Buzón directo</option>
+                <option value="valid">Número válido</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => void handleBulkOutcomeUpdate()}
+                disabled={!bulkContactOutcome || bulkOutcomeUpdating}
+                className="gold-button-primary min-h-9 rounded px-3 text-xs font-bold disabled:opacity-50"
+              >
+                {bulkOutcomeUpdating ? "Guardando…" : "Clasificar"}
+              </button>
+            </div>
             
             
             {/* Botón para agregar a la cola de llamadas */}
@@ -583,7 +662,52 @@ export const ProspectosList = () => {
           </div>
         ) : (
           <>
-            <table className="w-full text-left border-collapse">
+            <div className="divide-y divide-border md:hidden">
+              {paginatedLeads.map((lead) => (
+                <article key={lead.id} className="p-4" onClick={() => handleOpenLeadDetails(lead)}>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(lead.id)}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={() => toggleSelect(lead.id)}
+                      aria-label={`Seleccionar ${lead.first_name} ${lead.last_name}`}
+                      className="mt-1 h-4 w-4 accent-primary"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="truncate text-sm font-semibold text-foreground">{lead.first_name} {lead.last_name}</h2>
+                          <p className="mt-1 truncate text-xs text-muted-foreground">{lead.email || "Sin correo"}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{lead.phone || "Sin teléfono"}</p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-primary/25 bg-primary/10 px-2 py-1 text-[10px] font-semibold text-primary">{lead.status}</span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                        <span className="rounded-full bg-muted px-2 py-1">{lead.source || "Sin fuente"}</span>
+                        <span className="rounded-full bg-muted px-2 py-1">
+                          {lead.contact_outcome === "invalid_number" ? "Número inexistente" : lead.contact_outcome === "direct_voicemail" ? "Buzón directo" : lead.contact_outcome === "valid" ? "Número válido" : "Sin clasificar"}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedLead(lead);
+                            setFormData({ first_name: lead.first_name, last_name: lead.last_name, email: lead.email, phone: lead.phone, country: lead.country || "", investment_capacity: lead.investment_capacity || "", comments: lead.comments || "", status: lead.status, source: lead.source, agent_id: lead.agent_id || "", contact_outcome: lead.contact_outcome || "pending" });
+                            setIsFormOpen(true);
+                          }}
+                          className="app-icon-button"
+                          aria-label={`Editar ${lead.first_name} ${lead.last_name}`}
+                        ><Edit3 className="h-4 w-4" /></button>
+                        {canDelete && <button type="button" onClick={() => handleDeleteLead(lead.id, `${lead.first_name} ${lead.last_name}`)} className="app-icon-button hover:bg-destructive/10 hover:text-destructive" aria-label={`Eliminar ${lead.first_name} ${lead.last_name}`}><Trash2 className="h-4 w-4" /></button>}
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <table className="hidden w-full border-collapse text-left md:table">
               <thead>
                 <tr className="border-b border-[rgba(212,175,55,0.2)] bg-[#0D1428] text-xs font-semibold text-[#D4AF37] uppercase tracking-wider">
                   {/* ✅ Checkbox selección masiva */}
@@ -647,7 +771,7 @@ export const ProspectosList = () => {
                       <button
                         onClick={() => {
                           setSelectedLead(lead);
-                          setFormData({ first_name: lead.first_name, last_name: lead.last_name, email: lead.email, phone: lead.phone, country: lead.country || "", investment_capacity: lead.investment_capacity || "", comments: lead.comments || "", status: lead.status, source: lead.source, agent_id: lead.agent_id || "" });
+                          setFormData({ first_name: lead.first_name, last_name: lead.last_name, email: lead.email, phone: lead.phone, country: lead.country || "", investment_capacity: lead.investment_capacity || "", comments: lead.comments || "", status: lead.status, source: lead.source, agent_id: lead.agent_id || "", contact_outcome: lead.contact_outcome || "pending" });
                           setIsFormOpen(true);
                         }}
                         className="p-1 hover:text-[#D4AF37] text-[#94A3B8]"
@@ -667,7 +791,7 @@ export const ProspectosList = () => {
             </table>
 
             {/* ✅ NUEVO: Footer con paginación y selector de tamaño */}
-            <div className="flex items-center justify-between px-4 py-3 border-t border-[rgba(212,175,55,0.1)] bg-[#0D1428]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-card px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-[#4A6080]">Mostrar</span>
                 <select
@@ -845,13 +969,13 @@ export const ProspectosList = () => {
             </h3>
 
             {/* Name */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-xs text-[#94A3B8] mb-1">Nombre</label>
                 <input
                   type="text"
                   required
-                  disabled={isRetention || isCompliance || isSupervisor}
+                  disabled={isRetention || isCompliance || isAuditMode}
                   value={formData.first_name}
                   onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -862,7 +986,7 @@ export const ProspectosList = () => {
                 <input
                   type="text"
                   required
-                  disabled={isRetention || isCompliance || isSupervisor}
+                  disabled={isRetention || isCompliance || isAuditMode}
                   value={formData.last_name}
                   onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -876,7 +1000,7 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Email</label>
                 <input
                   type="email"
-                  disabled={isRetention || isCompliance || isSupervisor}
+                  disabled={isRetention || isCompliance || isAuditMode}
                   value={formData.email || ""}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -886,7 +1010,7 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Teléfono</label>
                 <input
                   type="text"
-                  disabled={isRetention || isCompliance || isSupervisor}
+                  disabled={isRetention || isCompliance || isAuditMode}
                   value={formData.phone || ""}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -894,14 +1018,14 @@ export const ProspectosList = () => {
               </div>
             </div>
 
-            {/* Country + Investment Capacity */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Country + Investment Capacity + phone quality */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <label className="block text-xs text-[#94A3B8] mb-1">País</label>
                 <input
                   type="text"
                   placeholder="Ej. México"
-                  disabled={isRetention || isCompliance || isSupervisor}
+                  disabled={isRetention || isCompliance || isAuditMode}
                   value={formData.country || ""}
                   onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -911,7 +1035,7 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Capacidad de Inversión</label>
                 <select
                   value={formData.investment_capacity || ""}
-                  disabled={isRetention || isCompliance || isSupervisor}
+                  disabled={isRetention || isCompliance || isAuditMode}
                   onChange={(e) => setFormData({ ...formData, investment_capacity: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8] disabled:opacity-50"
                 >
@@ -921,6 +1045,20 @@ export const ProspectosList = () => {
                   <option value="$25,000 - $100,000">$25,000 – $100,000</option>
                   <option value="$100,000 - $500,000">$100,000 – $500,000</option>
                   <option value="Más de $500,000">Más de $500,000</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-[#94A3B8] mb-1">Resultado telefónico</label>
+                <select
+                  value={formData.contact_outcome || "pending"}
+                  disabled={isCompliance}
+                  onChange={(e) => setFormData({ ...formData, contact_outcome: e.target.value as Lead["contact_outcome"] })}
+                  className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8] disabled:opacity-50"
+                >
+                  <option value="pending">Sin clasificar</option>
+                  <option value="valid">Número válido</option>
+                  <option value="invalid_number">Número inexistente</option>
+                  <option value="direct_voicemail">Buzón directo</option>
                 </select>
               </div>
             </div>
@@ -964,7 +1102,7 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Fuente</label>
                 <select
                   value={formData.source}
-                  disabled={isRetention || isCompliance || isSupervisor}
+                  disabled={isRetention || isCompliance || isAuditMode}
                   onChange={(e) => setFormData({ ...formData, source: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8] disabled:opacity-50"
                 >

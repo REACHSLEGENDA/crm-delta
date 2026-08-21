@@ -62,6 +62,40 @@ export default defineConfig({
   },
   build: {
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+
+          if (id.includes("xlsx")) return "vendor-spreadsheet";
+          if (id.includes("recharts") || id.includes("d3-")) {
+            return "vendor-charts";
+          }
+          if (id.includes("@supabase") || id.includes("ra-supabase")) {
+            return "vendor-supabase";
+          }
+          if (
+            id.includes("ra-core") ||
+            id.includes("@tanstack/react-query") ||
+            id.includes("ra-data-")
+          ) {
+            return "vendor-data";
+          }
+          if (id.includes("radix-ui") || id.includes("@radix-ui")) {
+            return "vendor-radix";
+          }
+          if (
+            id.includes("react-dom") ||
+            id.includes("react-router") ||
+            id.includes("/react/")
+          ) {
+            return "vendor-react";
+          }
+
+          return undefined;
+        },
+      },
+    },
   },
   resolve: {
     preserveSymlinks: true,

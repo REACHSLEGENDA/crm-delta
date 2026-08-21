@@ -129,13 +129,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const impersonate = (profileToImpersonate: Profile | null) => {
-    if (profileToImpersonate && (
-      originalProfile?.role !== "SUPERADMIN" ||
-      !originalProfile.active ||
-      !profileToImpersonate.active
-    )) {
-      return;
-    }
+    if (!profileToImpersonate) { setImpersonatedProfile(null); return; }
+    if (!originalProfile?.active || !profileToImpersonate.active) return;
+
+    const allowed =
+      originalProfile.role === "SUPERADMIN" ||
+      (originalProfile.role === "MANAGER" &&
+        originalProfile.department === profileToImpersonate.department &&
+        (profileToImpersonate.role === "SUPERVISOR" || profileToImpersonate.role === "AGENT")) ||
+      (originalProfile.role === "SUPERVISOR" &&
+        Boolean(originalProfile.team_id) &&
+        originalProfile.team_id === profileToImpersonate.team_id &&
+        profileToImpersonate.role === "AGENT");
+
+    if (!allowed) return;
     setImpersonatedProfile(profileToImpersonate);
   };
 

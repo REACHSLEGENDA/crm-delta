@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -10,7 +10,7 @@ import {
 
 export const ContactosList = () => {
   const { profile } = useAuth();
-  const { isAgent, canDelete } = usePermissions();
+  const { isAgent, isSupervisor, canDelete } = usePermissions();
   
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,14 +32,14 @@ export const ContactosList = () => {
     company_name: "",
   });
 
-  const fetchContacts = async () => {
+  const fetchContacts = useCallback(async () => {
     try {
       setLoading(true);
       let query = supabase.from("contacts").select("*").order("created_at", { ascending: false });
 
       if (isAgent && profile?.id) {
         query = query.eq("agent_id", profile.id);
-      } else if (profile?.team_id && !isAgent) {
+      } else if (isSupervisor && profile?.team_id) {
         query = query.eq("team_id", profile.team_id);
       }
 
@@ -52,13 +52,13 @@ export const ContactosList = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAgent, isSupervisor, profile?.id, profile?.team_id]);
 
   useEffect(() => {
     if (profile) {
       fetchContacts();
     }
-  }, [profile]);
+  }, [fetchContacts, profile]);
 
   const handleOpenContactDetails = async (contact: Contact) => {
     setSelectedContact(contact);
@@ -121,7 +121,7 @@ export const ContactosList = () => {
   });
 
   return (
-    <div className="space-y-6 p-6 bg-[#050814] min-h-screen text-[#F8FAFC]">
+    <div className="app-page">
       {/* Header */}
       <div className="flex justify-between items-center border-b border-[rgba(212,175,55,0.15)] pb-4">
         <div>

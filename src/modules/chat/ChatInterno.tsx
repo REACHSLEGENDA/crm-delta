@@ -1,478 +1,305 @@
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  FileText,
+  Hash,
+  Image as ImageIcon,
+  Lock,
+  Menu,
+  MessageSquare,
+  Paperclip,
+  Plus,
+  Send,
+  Smile,
+  Trash2,
+  UserRound,
+  X,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { Channel, Message, Profile } from "@/types";
-import { MessageSquare, Send, Hash, User, Lock, Plus, X } from "lucide-react";
+import type { Channel, ChannelType, FileAttachment, Message, Profile } from "@/types";
+import { getAttachmentUrl, openAttachment, removeAttachment, uploadAttachment } from "@/lib/attachments";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
-// ✅ Departamentos predefinidos con control de acceso
-const DEPT_CHANNELS = [
-  { name: "Ventas",      type: "ventas",   roles: ["AGENT","MANAGER","SUPERADMIN"], departments: ["Ventas"] },
-  { name: "Compliance",  type: "alertas",  roles: ["MANAGER","SUPERADMIN"], departments: ["Cumplimiento"] },
-  { name: "Retention",   type: "general",  roles: ["MANAGER","SUPERADMIN"], departments: ["Retencion"] },
-  { name: "Líderes",     type: "alertas",  roles: ["MANAGER","SUPERADMIN"], departments: [] },
+const DEFAULT_CHANNELS: Array<{ name: string; type: ChannelType }> = [
+  { name: "Ventas", type: "ventas" },
+  { name: "Compliance", type: "alertas" },
+  { name: "Retention", type: "general" },
+  { name: "Líderes", type: "alertas" },
 ];
+const EMOJIS = ["👍", "✅", "🎯", "📞", "💬", "🔥", "👏", "🤝", "🚀", "💰", "😊", "🙏"];
+
+const fullName = (profile?: Pick<Profile, "first_name" | "last_name" | "email">) =>
+  profile ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || profile.email : "Usuario";
+
+const AttachmentPreview = ({ attachment }: { attachment: FileAttachment }) => {
+  const [url, setUrl] = useState(attachment.url ?? "");
+  useEffect(() => {
+    let active = true;
+    if (!attachment.url && attachment.type?.startsWith("image/")) {
+      void getAttachmentUrl(attachment).then((signedUrl) => active && setUrl(signedUrl)).catch(() => undefined);
+    }
+    return () => { active = false; };
+  }, [attachment]);
+
+  if (url && (attachment.type?.startsWith("image/") || attachment.url)) {
+    return (
+      <button type="button" onClick={() => void openAttachment(attachment)} className="block overflow-hidden rounded-lg border border-border bg-muted/40">
+        <img src={url} alt={attachment.name} className="max-h-56 w-full object-contain" loading="lazy" />
+      </button>
+    );
+  }
+  return (
+    <button type="button" onClick={() => void openAttachment(attachment)} className="inline-flex min-h-10 max-w-full items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 text-xs text-foreground hover:border-primary/40">
+      <FileText className="h-4 w-4 shrink-0 text-primary" /><span className="truncate">{attachment.name}</span>
+    </button>
+  );
+};
 
 export const ChatInterno = () => {
   const { profile } = useAuth();
   const { isSuperAdmin, isManager, isAuditMode } = usePermissions();
-  const canManageChannels = isSuperAdmin || isManager;
-
+  const canManagePublicChannels = !isAuditMode && (isSuperAdmin || isManager);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [inputMessage, setInputMessage] = useState("");
   const [allUsers, setAllUsers] = useState<Profile[]>([]);
-
-  // ✅ NUEVO: Estado para crear canal
-  const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [inputMessage, setInputMessage] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [gifUrl, setGifUrl] = useState("");
+  const [showGifInput, setShowGifInput] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [mobileChannelsOpen, setMobileChannelsOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
-  const [newChannelType, setNewChannelType] = useState<"general"|"ventas"|"alertas"|"soporte"|"privado">("general");
+  const [newChannelType, setNewChannelType] = useState<ChannelType>("privado");
   const [newChannelMembers, setNewChannelMembers] = useState<string[]>([]);
   const [creatingChannel, setCreatingChannel] = useState(false);
-
+  const [confirmChannel, setConfirmChannel] = useState<Channel | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); };
 
-  // ✅ NUEVO: Asegura que los 4 canales existan en la BD
-  const ensureDefaultChannels = async () => {
-    for (const dept of DEPT_CHANNELS) {
-      const { data: existing } = await supabase
-        .from("channels")
-        .select("id")
-        .eq("name", dept.name)
-        .single();
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
-      if (!existing) {
-        await supabase.from("channels").insert({ name: dept.name, type: dept.type });
-      }
+  const fetchChannels = useCallback(async () => {
+    const { data, error: channelError } = await supabase.from("channels").select("*").order("name");
+    if (channelError) { setError(channelError.message); return; }
+    const nextChannels = (data ?? []) as Channel[];
+    setChannels(nextChannels);
+    setSelectedChannel((current) => nextChannels.find((item) => item.id === current?.id) ?? nextChannels[0] ?? null);
+  }, []);
+
+  const ensureDefaultChannels = useCallback(async () => {
+    if (!canManagePublicChannels || !profile?.id) return;
+    for (const channel of DEFAULT_CHANNELS) {
+      const { data } = await supabase.from("channels").select("id").eq("name", channel.name).maybeSingle();
+      if (!data) await supabase.from("channels").insert({ ...channel, created_by: profile.id });
     }
-  };
-
-  // ✅ Fetch de canales con control de acceso según rol
-  const fetchChannels = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("channels")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (!error && data) {
-        // Filtrar canales según acceso del usuario
-        const accessibleChannels = data.filter((ch: Channel) => {
-          const deptConfig = DEPT_CHANNELS.find(d => d.name === ch.name);
-          const role = profile?.role || "";
-          
-          if (deptConfig) {
-            return deptConfig.roles.includes(role) || deptConfig.departments.includes(profile?.department || "");
-          }
-          
-          // Canales creados manualmente: el `type` define quién puede entrar
-          if (ch.type === "privado") {
-            // El fallback `|| []` asegura que no falle si members es null. 
-            // isSuperAdmin también podría verlos si se desea, pero usualmente privado es solo miembros.
-            if (isSuperAdmin) return true;
-            return profile?.id ? (ch.members || []).includes(profile.id) : false;
-          }
-
-          if (isSuperAdmin) return true; // Superadmin ve todo
-          
-          if (ch.type === "general") return true; // Todos los roles
-          if (ch.type === "ventas") return role === "AGENT" || isManager;
-          if (ch.type === "soporte") return role === "SUPERVISOR" || isManager;
-          if (ch.type === "alertas") return isManager; // Solo managers
-          
-          return false;
-        });
-
-        setChannels(accessibleChannels as Channel[]);
-        if (accessibleChannels.length > 0) {
-          setSelectedChannel(accessibleChannels[0]);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const fetchAllUsers = async () => {
-    try {
-      const { data, error } = await supabase.from("profiles").select("*").order("first_name", { ascending: true });
-      if (!error && data) setAllUsers(data as Profile[]);
-    } catch (err) { console.error(err); }
-  };
+  }, [canManagePublicChannels, profile?.id]);
 
   useEffect(() => {
-    if (profile) {
-      if (isAuditMode) {
-        fetchChannels();
-      } else {
-        ensureDefaultChannels().then(fetchChannels);
-      }
-      if (canManageChannels) fetchAllUsers();
-    }
-  }, [profile, isAuditMode]);
+    if (!profile) return;
+    void Promise.all([
+      ensureDefaultChannels().then(fetchChannels),
+      supabase.from("profiles").select("*").eq("active", true).order("first_name").then(({ data }) => setAllUsers((data ?? []) as Profile[])),
+    ]);
+  }, [ensureDefaultChannels, fetchChannels, profile]);
 
-  // ✅ NUEVO: Crear canal personalizado
-  const handleCreateChannel = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newChannelName.trim()) return;
-    setCreatingChannel(true);
-    try {
-      const payload: any = { name: newChannelName.trim(), type: newChannelType };
-      if (newChannelType === "privado") {
-        payload.members = Array.from(new Set([...newChannelMembers, profile?.id]));
-      }
-
-      const { error } = await supabase
-        .from("channels")
-        .insert(payload);
-      if (!error) {
-        setNewChannelName("");
-        setNewChannelType("general");
-        setNewChannelMembers([]);
-        setShowCreateChannel(false);
-        await fetchChannels();
-      } else {
-        alert("Error al crear canal: " + (error.message || "nombre duplicado"));
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setCreatingChannel(false);
-    }
-  };
-
-  const [confirmModal, setConfirmModal] = useState<{isOpen: boolean; targetId: string; targetName: string}>({
-    isOpen: false, targetId: "", targetName: ""
-  });
-
-  const confirmDeleteChannel = async () => {
-    const { error } = await supabase.from("channels").delete().eq("id", confirmModal.targetId);
-    if (!error) {
-      if (selectedChannel?.id === confirmModal.targetId) setSelectedChannel(null);
-      setChannels(prev => prev.filter(c => c.id !== confirmModal.targetId));
-    }
-  };
-
-  // ✅ NUEVO: Eliminar canal
-  const handleDeleteChannel = (channelId: string, channelName: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setConfirmModal({ isOpen: true, targetId: channelId, targetName: channelName });
-  };
-
-  const fetchMessages = async (channelId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*, profiles(first_name, last_name, email)")
-        .eq("channel_id", channelId)
-        .order("created_at", { ascending: true });
-
-      if (!error && data) {
-        setMessages(data as Message[]);
-        setTimeout(scrollToBottom, 100);
-      }
-    } catch (err) { console.error(err); }
-  };
+  const fetchMessages = useCallback(async (channelId: string) => {
+    const { data, error: messageError } = await supabase
+      .from("messages")
+      .select("*, profiles(first_name, last_name, email)")
+      .eq("channel_id", channelId)
+      .order("created_at", { ascending: true })
+      .limit(1000);
+    if (messageError) { setError(messageError.message); return; }
+    setMessages((data ?? []) as Message[]);
+    window.setTimeout(scrollToBottom, 50);
+  }, []);
 
   useEffect(() => {
-    if (selectedChannel) {
-      fetchMessages(selectedChannel.id);
+    if (!selectedChannel) { setMessages([]); return; }
+    void fetchMessages(selectedChannel.id);
+    const subscription = supabase
+      .channel(`messages_${selectedChannel.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `channel_id=eq.${selectedChannel.id}` }, async (payload) => {
+        if (payload.new.user_id === profile?.id) return;
+        const { data: sender } = await supabase.from("profiles").select("first_name,last_name,email").eq("id", payload.new.user_id).maybeSingle();
+        setMessages((current) => current.some((item) => item.id === payload.new.id) ? current : [...current, { ...(payload.new as Message), profiles: sender ?? undefined }]);
+        window.setTimeout(scrollToBottom, 30);
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(subscription); };
+  }, [fetchMessages, profile?.id, selectedChannel]);
 
-      const subscription = supabase
-        .channel(`messages_channel_${selectedChannel.id}`)
-        .on("postgres_changes", {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `channel_id=eq.${selectedChannel.id}`,
-        }, async (payload) => {
-          // Ignorar mis propios mensajes que ya se inyectaron de forma optimista
-          if (payload.new.user_id === profile?.id) return;
-
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("first_name, last_name, email")
-            .eq("id", payload.new.user_id)
-            .single();
-
-          const newMessageWithProfile: Message = {
-            ...(payload.new as Message),
-            profiles: profileData || undefined,
-          };
-          setMessages((prev) => {
-            if (prev.some(m => m.id === payload.new.id)) return prev;
-            return [...prev, newMessageWithProfile];
-          });
-          setTimeout(scrollToBottom, 100);
-        })
-        .subscribe();
-
-      return () => { supabase.removeChannel(subscription); };
+  const createChannel = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!profile?.id || !newChannelName.trim()) return;
+    const type = canManagePublicChannels ? newChannelType : "privado";
+    if (type === "privado" && newChannelMembers.length === 0) {
+      setError("Selecciona al menos un colaborador para el chat privado.");
+      return;
     }
-  }, [selectedChannel]);
+    setCreatingChannel(true); setError("");
+    const members = type === "privado" ? Array.from(new Set([profile.id, ...newChannelMembers])) : [];
+    const { error: createError } = await supabase.from("channels").insert({
+      name: newChannelName.trim(), type, members, created_by: profile.id,
+    });
+    setCreatingChannel(false);
+    if (createError) { setError(createError.message); return; }
+    setNewChannelName(""); setNewChannelType("privado"); setNewChannelMembers([]); setCreateOpen(false);
+    await fetchChannels();
+  };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputMessage.trim() || !selectedChannel || !profile) return;
-    
+  const sendMessage = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!profile?.id || !selectedChannel || isAuditMode || sending) return;
     const content = inputMessage.trim();
-    const tempId = crypto.randomUUID();
-    
-    // Inyección optimista
-    const tempMsg: Message = {
-      id: tempId,
-      channel_id: selectedChannel.id,
-      user_id: profile.id,
-      content: content,
-      created_at: new Date().toISOString(),
-      profiles: profile as any
-    };
-    
-    setMessages(prev => [...prev, tempMsg]);
-    setInputMessage("");
-    setTimeout(scrollToBottom, 50);
-
+    const externalGif = gifUrl.trim();
+    if (!content && pendingFiles.length === 0 && !externalGif) return;
+    if (externalGif && !/^https:\/\//i.test(externalGif)) {
+      setError("El GIF debe usar una URL segura que comience con https://");
+      return;
+    }
+    setSending(true); setError("");
+    const uploaded: FileAttachment[] = [];
     try {
-      const { data, error } = await supabase.from("messages").insert({
-        channel_id: selectedChannel.id,
-        user_id: profile.id,
-        content: content,
+      for (const file of pendingFiles) uploaded.push(await uploadAttachment(file, profile.id, `chat/${selectedChannel.id}`));
+      if (externalGif) uploaded.push({ name: "GIF", path: `external-${crypto.randomUUID()}`, url: externalGif, type: "image/gif" });
+      const tempId = crypto.randomUUID();
+      const optimistic: Message = {
+        id: tempId, channel_id: selectedChannel.id, user_id: profile.id,
+        content: content || (externalGif ? "GIF" : "Archivo adjunto"), attachments: uploaded,
+        created_at: new Date().toISOString(), profiles: profile,
+      };
+      setMessages((current) => [...current, optimistic]);
+      setInputMessage(""); setPendingFiles([]); setGifUrl(""); setShowGifInput(false); setShowEmojiPicker(false);
+      window.setTimeout(scrollToBottom, 30);
+      const { data, error: sendError } = await supabase.from("messages").insert({
+        channel_id: selectedChannel.id, user_id: profile.id,
+        content: optimistic.content, attachments: uploaded,
       }).select().single();
-      
-      if (error) {
-        console.error(error);
-        setMessages(prev => prev.filter(m => m.id !== tempId));
-      } else {
-        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: data.id } : m));
-      }
-    } catch (err) { 
-      console.error(err);
-      setMessages(prev => prev.filter(m => m.id !== tempId));
+      if (sendError) throw sendError;
+      setMessages((current) => current.map((message) => message.id === tempId ? { ...message, id: data.id } : message));
+    } catch (sendError) {
+      await Promise.allSettled(uploaded.filter((item) => !item.url).map(removeAttachment));
+      setError(sendError instanceof Error ? sendError.message : "No se pudo enviar el mensaje.");
+      await fetchMessages(selectedChannel.id);
+    } finally {
+      setSending(false);
     }
   };
 
-  // ✅ Etiquetar canal con icono de acceso
-  const getChannelAccess = (chName: string) => {
-    const dept = DEPT_CHANNELS.find(d => d.name === chName);
-    if (!dept) return null;
-    const isRestricted = !dept.roles.includes("AGENT");
-    return isRestricted;
+  const deleteChannel = async () => {
+    if (!confirmChannel) return;
+    const { error: deleteError } = await supabase.from("channels").delete().eq("id", confirmChannel.id);
+    if (deleteError) setError(deleteError.message);
+    else {
+      setSelectedChannel(null);
+      await fetchChannels();
+    }
+    setConfirmChannel(null);
   };
+
+  const canDeleteChannel = (channel: Channel) => canManagePublicChannels || channel.created_by === profile?.id;
 
   return (
-    <div className="flex h-[calc(100vh-100px)] bg-[#050814] text-[#F8FAFC]">
-      {/* Channels Sidebar */}
-      <div className="w-64 bg-[#0D1428] border-r border-[rgba(212,175,55,0.15)] flex flex-col">
-        <div className="p-4 border-b border-[rgba(212,175,55,0.12)] bg-[#111A33] flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-[#D4AF37]" />
-          <h3 className="text-xs font-title font-bold text-[#D4AF37] uppercase tracking-wider flex-1">Canales</h3>
-          {/* ✅ Botón crear canal (solo managers/superadmins) */}
-          {canManageChannels && (
-            <button
-              onClick={() => setShowCreateChannel(v => !v)}
-              title="Crear canal"
-              className="p-1 rounded text-[#64748B] hover:text-[#D4AF37] hover:bg-[rgba(212,175,55,0.08)] transition-all"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+    <section className="app-page gap-3" aria-labelledby="chat-title">
+      <header className="app-page-header">
+        <div><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary"><MessageSquare className="h-4 w-4" /> Colaboración interna</p><h1 id="chat-title" className="font-title text-2xl font-bold text-foreground sm:text-3xl">Chat interno</h1><p className="mt-1 text-sm text-muted-foreground">Canales por área, grupos privados y archivos en un solo espacio.</p></div>
+        {!isAuditMode && <button type="button" onClick={() => setCreateOpen(true)} className="gold-button-primary inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-sm font-bold"><Plus className="h-4 w-4" /> Nuevo chat</button>}
+      </header>
+      {error && <div role="alert" className="flex justify-between gap-3 rounded-lg border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive"><span>{error}</span><button type="button" onClick={() => setError("")} className="font-semibold underline">Cerrar</button></div>}
 
-        {/* ✅ NUEVO: Formulario inline para crear canal */}
-        {showCreateChannel && canManageChannels && (
-          <form onSubmit={handleCreateChannel} className="p-3 border-b border-[rgba(212,175,55,0.12)] bg-[rgba(212,175,55,0.04)] space-y-2">
-            <input
-              type="text"
-              required
-              placeholder="Nombre del canal..."
-              value={newChannelName}
-              onChange={(e) => setNewChannelName(e.target.value)}
-              className="w-full px-2.5 py-1.5 text-xs bg-[#050814] border border-[rgba(212,175,55,0.2)] rounded text-white focus:outline-none focus:border-[#D4AF37]"
-            />
-            <select
-              value={newChannelType}
-              onChange={(e) => setNewChannelType(e.target.value as any)}
-              className="w-full px-2.5 py-1.5 text-xs bg-[#050814] border border-[rgba(212,175,55,0.2)] rounded text-[#94A3B8] focus:outline-none focus:border-[#D4AF37]"
-            >
-              <option value="general">Acceso: Todos los Roles</option>
-              <option value="ventas">Acceso: Solo Agentes</option>
-              <option value="soporte">Acceso: Solo Supervisores</option>
-              <option value="alertas">Acceso: Solo Líderes (Admin/Managers)</option>
-              <option value="privado">Acceso: Privado (Elegir personal)</option>
-            </select>
-            
-            {newChannelType === "privado" && (
-              <div className="max-h-32 overflow-y-auto bg-[#050814] border border-[rgba(212,175,55,0.2)] rounded p-2 text-xs">
-                {allUsers.map(user => (
-                  <label key={user.id} className="flex items-center gap-2 mb-1 cursor-pointer hover:bg-[rgba(212,175,55,0.1)] p-1 rounded">
-                    <input 
-                      type="checkbox" 
-                      checked={newChannelMembers.includes(user.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) setNewChannelMembers([...newChannelMembers, user.id]);
-                        else setNewChannelMembers(newChannelMembers.filter(id => id !== user.id));
-                      }}
-                      className="accent-[#D4AF37]"
-                    />
-                    <span className="text-[#94A3B8]">{user.first_name} {user.last_name} ({user.email})</span>
-                  </label>
-                ))}
-              </div>
-            )}
-            
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={creatingChannel}
-                className="flex-1 gold-button-primary py-1.5 text-[10px] font-bold rounded disabled:opacity-50"
-              >
-                {creatingChannel ? "..." : "Crear"}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setShowCreateChannel(false); setNewChannelName(""); setNewChannelMembers([]); }}
-                className="px-2 py-1.5 text-[10px] text-[#64748B] hover:text-white rounded hover:bg-[rgba(255,255,255,0.05)]"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* ✅ NUEVO: Secciones por departamento con opción de eliminar */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-1">
-          <p className="text-[9px] text-[#334155] font-bold uppercase tracking-[0.15em] px-2 py-1.5">Departamentos</p>
-          {channels.map((chan) => {
-            const isRestricted = getChannelAccess(chan.name);
-            const isSelected = selectedChannel?.id === chan.id;
-            return (
-              <div key={chan.id} className="group relative">
-                <button
-                  onClick={() => setSelectedChannel(chan)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-xs rounded font-medium transition-all pr-8 ${
-                    isSelected
-                      ? "bg-[rgba(212,175,55,0.12)] text-[#D4AF37] border-l-2 border-[#D4AF37]"
-                      : "text-[#94A3B8] hover:bg-[rgba(212,175,55,0.05)] hover:text-[#F8FAFC]"
-                  }`}
-                >
-                  {isRestricted ? (
-                    <Lock className="h-3 w-3 text-[#D4AF37] shrink-0" />
-                  ) : (
-                    <Hash className="h-3.5 w-3.5 shrink-0" />
-                  )}
-                  <span className="truncate flex-1 text-left">{chan.name}</span>
-                  {isRestricted && (
-                    <span className="text-[8px] bg-[rgba(212,175,55,0.1)] text-[#D4AF37] px-1 rounded font-bold">LÍDER</span>
-                  )}
-                </button>
-                {/* Botón eliminar canal — solo managers, solo al hover */}
-                {canManageChannels && (
-                  <button
-                    onClick={(e) => handleDeleteChannel(chan.id, chan.name, e)}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 rounded text-[#334155] hover:text-[#EF4444] hover:bg-[rgba(239,68,68,0.1)] transition-all"
-                    title="Eliminar canal"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            );
-          })}
-
-          {channels.length === 0 && (
-            <p className="text-center text-xs text-[#64748B] pt-4">No tienes canales asignados.</p>
-          )}
-        </div>
-      </div>
-
-      {/* Messages Panel */}
-      <div className="flex-1 flex flex-col justify-between bg-[rgba(13,20,40,0.2)]">
-        {selectedChannel ? (
-          <>
-            {/* Active Channel Header */}
-            <div className="p-4 border-b border-[rgba(212,175,55,0.12)] bg-[#111A33] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Hash className="h-5 w-5 text-[#D4AF37]" />
-                <h4 className="text-sm font-title font-bold text-[#F8FAFC]">{selectedChannel.name}</h4>
-                {getChannelAccess(selectedChannel.name) && (
-                  <span className="text-[9px] bg-[rgba(212,175,55,0.1)] text-[#D4AF37] border border-[rgba(212,175,55,0.2)] px-1.5 py-0.5 rounded font-bold tracking-wider">
-                    🔒 RESTRINGIDO
-                  </span>
-                )}
-              </div>
-              <span className="text-[10px] bg-[rgba(212,175,55,0.05)] border border-[rgba(212,175,55,0.15)] px-2 py-0.5 rounded text-[#D4AF37] uppercase font-bold tracking-wider">
-                {selectedChannel.type}
-              </span>
-            </div>
-
-            {/* Message Stream */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.map((msg) => {
-                const isOwnMessage = msg.user_id === profile?.id;
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex items-start gap-3 max-w-[70%] ${isOwnMessage ? "ml-auto flex-row-reverse" : "mr-auto"}`}
-                  >
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[rgba(212,175,55,0.1)] border border-[rgba(212,175,55,0.2)]">
-                      <User className="h-4 w-4 text-[#D4AF37]" />
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className={`flex items-center gap-2 text-[10px] text-[#64748B] ${isOwnMessage ? "justify-end" : ""}`}>
-                        <span className="font-semibold text-[#94A3B8]">
-                          {msg.profiles?.first_name ? `${msg.profiles.first_name} ${msg.profiles.last_name}` : msg.profiles?.email || "Usuario"}
-                        </span>
-                        <span>•</span>
-                        <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                      </div>
-
-                      <div className={`p-3 rounded text-xs leading-relaxed ${
-                        isOwnMessage
-                          ? "bg-[#D4AF37] text-[#050814] rounded-tr-none font-medium"
-                          : "bg-[#111A33] border border-[rgba(212,175,55,0.15)] text-[#F8FAFC] rounded-tl-none"
-                      }`}>
-                        {msg.content}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Input Bar */}
-            <form onSubmit={handleSendMessage} className="p-4 border-t border-[rgba(212,175,55,0.15)] bg-[#0D1428] flex gap-3">
-              <input
-                type="text"
-                placeholder={`Escribe un mensaje en #${selectedChannel.name}...`}
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                className="flex-1 px-4 py-2 text-xs bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-white"
-              />
-              <button type="submit" className="gold-button-primary p-2 px-4 rounded text-xs font-semibold flex items-center gap-1.5">
-                <Send className="h-4 w-4" /> Enviar
-              </button>
-            </form>
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-12 text-[#64748B] space-y-2">
-            <Hash className="h-10 w-10 text-[rgba(212,175,55,0.2)]" />
-            <p className="text-xs">No hay ningún canal seleccionado.</p>
+      <div className="app-panel relative flex min-h-[600px] flex-1 overflow-hidden lg:h-[calc(100dvh-250px)]">
+        {mobileChannelsOpen && <button type="button" aria-label="Cerrar canales" onClick={() => setMobileChannelsOpen(false)} className="absolute inset-0 z-20 bg-black/45 lg:hidden" />}
+        <aside className={`absolute inset-y-0 left-0 z-30 flex w-[min(19rem,86vw)] flex-col border-r border-border bg-card transition-transform lg:static lg:w-72 lg:translate-x-0 ${mobileChannelsOpen ? "translate-x-0" : "-translate-x-full"}`}>
+          <div className="flex min-h-16 items-center justify-between border-b border-border px-4">
+            <div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Conversaciones</p><p className="text-[11px] text-muted-foreground">{channels.length} disponibles</p></div>
+            <button type="button" onClick={() => setMobileChannelsOpen(false)} className="app-icon-button lg:hidden" aria-label="Cerrar lista"><X className="h-4 w-4" /></button>
           </div>
-        )}
+          <div className="flex-1 space-y-1 overflow-y-auto p-2">
+            {channels.map((channel) => (
+              <div key={channel.id} className="group relative">
+                <button type="button" onClick={() => { setSelectedChannel(channel); setMobileChannelsOpen(false); }} className={`flex min-h-12 w-full items-center gap-3 rounded-lg px-3 pr-11 text-left transition-colors ${selectedChannel?.id === channel.id ? "bg-primary/12 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}>
+                  {channel.type === "privado" ? <Lock className="h-4 w-4 shrink-0" /> : <Hash className="h-4 w-4 shrink-0" />}
+                  <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{channel.name}</span><span className="block text-[10px] uppercase tracking-wide opacity-70">{channel.type === "privado" ? "Privado" : channel.type}</span></span>
+                </button>
+                {canDeleteChannel(channel) && <button type="button" onClick={() => setConfirmChannel(channel)} className="app-icon-button absolute right-1.5 top-1.5 h-9 w-9 opacity-100 hover:bg-destructive/10 hover:text-destructive lg:opacity-0 lg:group-hover:opacity-100" aria-label={`Eliminar ${channel.name}`}><Trash2 className="h-3.5 w-3.5" /></button>}
+              </div>
+            ))}
+            {channels.length === 0 && <p className="px-3 py-8 text-center text-sm text-muted-foreground">No hay conversaciones disponibles.</p>}
+          </div>
+        </aside>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-16 items-center gap-3 border-b border-border px-3 sm:px-4">
+            <button type="button" onClick={() => setMobileChannelsOpen(true)} className="app-icon-button lg:hidden" aria-label="Abrir canales"><Menu className="h-4 w-4" /></button>
+            {selectedChannel ? <><span className="grid h-9 w-9 place-items-center rounded-lg bg-primary/10 text-primary">{selectedChannel.type === "privado" ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />}</span><div className="min-w-0"><h2 className="truncate text-sm font-semibold text-foreground">{selectedChannel.name}</h2><p className="text-xs text-muted-foreground">{selectedChannel.type === "privado" ? `${selectedChannel.members?.length ?? 0} participantes` : "Canal interno"}</p></div></> : <p className="text-sm text-muted-foreground">Selecciona una conversación</p>}
+          </div>
+
+          {selectedChannel ? (
+            <>
+              <div className="flex-1 space-y-4 overflow-y-auto p-3 sm:p-5">
+                {messages.map((message) => {
+                  const own = message.user_id === profile?.id;
+                  return (
+                    <article key={message.id} className={`flex max-w-[92%] items-start gap-2.5 sm:max-w-[78%] ${own ? "ml-auto flex-row-reverse" : ""}`}>
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary"><UserRound className="h-4 w-4" /></span>
+                      <div className={`min-w-0 ${own ? "text-right" : ""}`}>
+                        <p className="mb-1 text-[10px] text-muted-foreground"><span className="font-semibold">{fullName(message.profiles)}</span> · {new Date(message.created_at).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</p>
+                        <div className={`rounded-xl px-3 py-2 text-left text-sm leading-relaxed ${own ? "rounded-tr-sm bg-primary text-primary-foreground" : "rounded-tl-sm border border-border bg-card text-foreground"}`}>
+                          {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
+                          {message.attachments && message.attachments.length > 0 && <div className={`grid gap-2 ${message.content ? "mt-2" : ""}`}>{message.attachments.map((attachment) => <AttachmentPreview key={`${attachment.path}-${attachment.url ?? ""}`} attachment={attachment} />)}</div>}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+                {messages.length === 0 && <div className="grid h-full min-h-64 place-items-center text-center"><div><MessageSquare className="mx-auto mb-3 h-9 w-9 text-primary/45" /><p className="font-semibold text-foreground">Inicia la conversación</p><p className="text-sm text-muted-foreground">Comparte una actualización o adjunta un archivo.</p></div></div>}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {!isAuditMode && <form onSubmit={sendMessage} className="border-t border-border bg-card p-3 sm:p-4">
+                {pendingFiles.length > 0 && <div className="mb-2 flex flex-wrap gap-2">{pendingFiles.map((file, index) => <span key={`${file.name}-${index}`} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-muted px-2.5 text-xs"><Paperclip className="h-3.5 w-3.5 text-primary" /><span className="max-w-40 truncate">{file.name}</span><button type="button" onClick={() => setPendingFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Quitar ${file.name}`}><X className="h-3.5 w-3.5" /></button></span>)}</div>}
+                {showGifInput && <div className="mb-2 flex gap-2"><input value={gifUrl} onChange={(event) => setGifUrl(event.target.value)} placeholder="Pega una URL https:// de GIF" className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /><button type="button" onClick={() => { setShowGifInput(false); setGifUrl(""); }} className="app-icon-button" aria-label="Quitar GIF"><X className="h-4 w-4" /></button></div>}
+                {showEmojiPicker && <div className="mb-2 flex flex-wrap gap-1 rounded-lg border border-border bg-background p-2">{EMOJIS.map((emoji) => <button key={emoji} type="button" onClick={() => setInputMessage((current) => `${current}${emoji}`)} className="grid h-10 w-10 place-items-center rounded-lg text-lg hover:bg-accent" aria-label={`Agregar ${emoji}`}>{emoji}</button>)}</div>}
+                <div className="flex items-end gap-2">
+                  <div className="flex gap-1">
+                    <label className="app-icon-button cursor-pointer" aria-label="Adjuntar archivos"><Paperclip className="h-4 w-4" /><input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="sr-only" onChange={(event) => setPendingFiles((current) => [...current, ...Array.from(event.target.files ?? [])])} /></label>
+                    <button type="button" onClick={() => setShowEmojiPicker((value) => !value)} className="app-icon-button" aria-label="Agregar emoji"><Smile className="h-4 w-4" /></button>
+                    <button type="button" onClick={() => setShowGifInput((value) => !value)} className="app-icon-button" aria-label="Agregar GIF"><ImageIcon className="h-4 w-4" /></button>
+                  </div>
+                  <textarea rows={1} value={inputMessage} onChange={(event) => setInputMessage(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder={`Mensaje en ${selectedChannel.name}`} className="min-h-11 max-h-32 min-w-0 flex-1 resize-y rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                  <button type="submit" disabled={sending || (!inputMessage.trim() && pendingFiles.length === 0 && !gifUrl.trim())} className="gold-button-primary grid h-11 w-11 shrink-0 place-items-center rounded-lg disabled:opacity-45" aria-label="Enviar mensaje"><Send className="h-4 w-4" /></button>
+                </div>
+              </form>}
+            </>
+          ) : <div className="grid flex-1 place-items-center p-8 text-center"><div><Hash className="mx-auto mb-3 h-10 w-10 text-primary/40" /><p className="font-semibold text-foreground">Selecciona una conversación</p><p className="text-sm text-muted-foreground">Abre un canal o crea un chat privado.</p></div></div>}
+        </div>
       </div>
-      {/* Delete Confirmation Modal */}
-      <ConfirmModal
-        isOpen={confirmModal.isOpen}
-        title="Eliminar Canal"
-        message={`¿Estás seguro de eliminar el canal "${confirmModal.targetName}"? Todos los mensajes enviados serán eliminados permanentemente.`}
-        onConfirm={confirmDeleteChannel}
-        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
-      />
-    </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader><DialogTitle>Nuevo chat</DialogTitle><DialogDescription>{canManagePublicChannels ? "Crea un canal general o una conversación privada." : "Crea una conversación privada con uno o varios colaboradores."}</DialogDescription></DialogHeader>
+          <form id="create-channel-form" onSubmit={createChannel} className="grid gap-4">
+            <label className="grid gap-1.5 text-sm font-medium">Nombre<input value={newChannelName} onChange={(event) => setNewChannelName(event.target.value)} className="h-11 rounded-lg border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring" /></label>
+            {canManagePublicChannels && <label className="grid gap-1.5 text-sm font-medium">Tipo<select value={newChannelType} onChange={(event) => setNewChannelType(event.target.value as ChannelType)} className="h-11 rounded-lg border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="privado">Privado</option><option value="general">General</option><option value="ventas">Ventas</option><option value="soporte">Supervisión</option><option value="alertas">Líderes</option></select></label>}
+            {(!canManagePublicChannels || newChannelType === "privado") && <fieldset className="grid gap-2"><legend className="text-sm font-medium">Participantes</legend><div className="grid max-h-60 gap-1 overflow-y-auto rounded-lg border border-border p-2 sm:grid-cols-2">{allUsers.filter((user) => user.id !== profile?.id).map((user) => <label key={user.id} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 hover:bg-accent"><input type="checkbox" checked={newChannelMembers.includes(user.id)} onChange={(event) => setNewChannelMembers((current) => event.target.checked ? [...current, user.id] : current.filter((id) => id !== user.id))} className="h-4 w-4 accent-primary" /><span className="min-w-0 text-sm"><span className="block truncate font-medium">{fullName(user)}</span><span className="block truncate text-[10px] text-muted-foreground">{user.department}</span></span></label>)}</div></fieldset>}
+          </form>
+          <DialogFooter><button type="button" onClick={() => setCreateOpen(false)} className="min-h-11 rounded-lg border border-border px-4 text-sm font-semibold hover:bg-accent">Cancelar</button><button form="create-channel-form" type="submit" disabled={creatingChannel} className="gold-button-primary min-h-11 rounded-lg px-4 text-sm font-bold disabled:opacity-50">{creatingChannel ? "Creando…" : "Crear chat"}</button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <ConfirmModal isOpen={Boolean(confirmChannel)} title="Eliminar conversación" message={`¿Deseas eliminar “${confirmChannel?.name ?? "esta conversación"}” y todos sus mensajes?`} onConfirm={() => void deleteChannel()} onCancel={() => setConfirmChannel(null)} />
+    </section>
   );
 };

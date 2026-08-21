@@ -2,7 +2,8 @@ export type UserRole = 'SUPERADMIN' | 'MANAGER' | 'AGENT' | 'SUPERVISOR';
 export type Department = 'Ventas' | 'Retencion' | 'Cumplimiento';
 export type LeadStatus = 'Nuevo' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido' | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
 export type DealStage = 'Nuevo lead' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido' | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
-export type CallDisposition = 'Interesado' | 'No interesado' | 'Buzón' | 'Callback' | 'Depósito confirmado';
+export type CallDisposition = 'Interesado' | 'No interesado' | 'Buzón' | 'Número inexistente' | 'Callback' | 'Depósito confirmado';
+export type LeadContactOutcome = 'pending' | 'valid' | 'invalid_number' | 'direct_voicemail';
 export type ChannelType = 'general' | 'ventas' | 'soporte' | 'alertas' | 'privado';
 export type RuleStatus = 'active' | 'inactive';
 
@@ -24,6 +25,9 @@ export interface Team {
   id: string;
   name: string;
   description?: string;
+  department?: Department | null;
+  leader_id?: string | null;
+  active?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -48,6 +52,10 @@ export interface Lead {
   agent_id?: string | null;
   team_id?: string | null;
   created_by?: string | null;
+  is_burned?: boolean;
+  burned_at?: string | null;
+  burn_reason?: string | null;
+  contact_outcome?: LeadContactOutcome;
   created_at: string;
   updated_at: string;
 }
@@ -87,6 +95,11 @@ export interface Deal {
   lead_id?: string;
   agent_id?: string | null;
   team_id?: string | null;
+  currency?: string;
+  expected_closing_date?: string | null;
+  closed_at?: string | null;
+  close_reason?: string | null;
+  loss_reason?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -110,9 +123,24 @@ export interface Activity {
   deal_id?: string;
   contact_id?: string;
   user_id?: string;
+  title?: string | null;
   description: string;
   type: string;
+  due_at?: string | null;
+  reminder_at?: string | null;
+  status?: 'pending' | 'completed' | 'postponed' | 'cancelled';
+  completed_at?: string | null;
+  metadata?: Record<string, unknown>;
   created_at: string;
+  updated_at?: string;
+}
+
+export interface FileAttachment {
+  name: string;
+  path: string;
+  url?: string;
+  type?: string;
+  size?: number;
 }
 
 export interface Call {
@@ -135,6 +163,7 @@ export interface Note {
   contact_id?: string;
   user_id: string;
   content: string;
+  attachments?: FileAttachment[];
   created_at: string;
 }
 
@@ -153,6 +182,7 @@ export interface Channel {
   name: string;
   type: ChannelType;
   members?: string[] | null;
+  created_by?: string | null;
   created_at: string;
 }
 
@@ -161,6 +191,7 @@ export interface Message {
   channel_id: string;
   user_id?: string;
   content: string;
+  attachments?: FileAttachment[];
   created_at: string;
   profiles?: {
     first_name?: string;

@@ -1,554 +1,368 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CalendarDays, Columns3, DollarSign, FilterX, List, ListChecks, Plus, Search, TrendingUp, Trophy, XCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { Deal, Lead, LeadStatus } from "@/types";
-import { Plus, User, DollarSign, X, TrendingUp, XCircle, Trash2, Pencil } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import type { Activity, Deal, Lead, Note, Profile } from "@/types";
+import { removeAttachment, uploadAttachment } from "@/lib/attachments";
+import { ActivitiesView, CalendarView, DealsListView, KanbanView } from "./PipelineViews";
+import { DealWorkspaceSheet, type ActivityDraft } from "./DealWorkspaceSheet";
+import { CloseDealDialog, DealFormDialog, PostponeDialog, type DealFormPayload } from "./DealDialogs";
+import { ACTIVE_STAGES, PIPELINE_STAGES, formatCurrency, type PipelineStage } from "./pipeline";
 
-const STAGES = [
-  "Nuevo lead","Contactado","Interesado","Asesoría","Depósito pendiente","Ganado","Perdido",
-] as const;
-type Stage = (typeof STAGES)[number];
+type ViewMode = "kanban" | "list" | "activities" | "calendar";
+interface ConfirmTarget { type: "deal" | "activity"; id: string; name: string; }
 
-interface StageConfig { color: string; bg: string; border: string; badge: string; label: string; emoji: string; }
-
-const STAGE_CONFIG: Record<Stage, StageConfig> = {
-  "Nuevo lead":       { color:"#64748B", bg:"rgba(100,116,139,0.08)", border:"rgba(100,116,139,0.35)", badge:"bg-[rgba(100,116,139,0.18)] text-[#94A3B8]", label:"text-[#94A3B8]", emoji:"○" },
-  Contactado:         { color:"#00C9FF", bg:"rgba(0,201,255,0.06)",   border:"rgba(0,201,255,0.35)",   badge:"bg-[rgba(0,201,255,0.15)] text-[#00C9FF]",   label:"text-[#00C9FF]",  emoji:"◎" },
-  Interesado:         { color:"#F59E0B", bg:"rgba(245,158,11,0.06)",  border:"rgba(245,158,11,0.35)",  badge:"bg-[rgba(245,158,11,0.15)] text-[#F59E0B]",  label:"text-[#F59E0B]",  emoji:"◐" },
-  Asesoría:           { color:"#F97316", bg:"rgba(249,115,22,0.06)",  border:"rgba(249,115,22,0.35)",  badge:"bg-[rgba(249,115,22,0.15)] text-[#F97316]",  label:"text-[#F97316]",  emoji:"◑" },
-  "Depósito pendiente":{ color:"#A78BFA", bg:"rgba(167,139,250,0.06)", border:"rgba(167,139,250,0.35)", badge:"bg-[rgba(167,139,250,0.15)] text-[#A78BFA]", label:"text-[#A78BFA]", emoji:"●" },
-  Ganado:             { color:"#22C55E", bg:"rgba(34,197,94,0.07)",   border:"rgba(34,197,94,0.35)",   badge:"bg-[rgba(34,197,94,0.15)] text-[#22C55E]",   label:"text-[#22C55E]",  emoji:"✓" },
-  Perdido:            { color:"#EF4444", bg:"rgba(239,68,68,0.05)",   border:"rgba(239,68,68,0.25)",   badge:"bg-[rgba(239,68,68,0.12)] text-[#EF4444]",   label:"text-[#EF4444]",  emoji:"✕" },
-};
-
-const STAGE_TO_LEAD_STATUS: Record<Stage, LeadStatus> = {
-  "Nuevo lead": "Nuevo",
-  Contactado: "Contactado",
-  Interesado: "Interesado",
-  Asesoría: "Asesoría",
-  "Depósito pendiente": "Depósito pendiente",
-  Ganado: "Ganado",
-  Perdido: "Perdido",
-};
+const VIEW_KEY = "delta-capital-pipeline-view";
+const MAX_REMINDER_DELAY = 7 * 24 * 60 * 60 * 1000;
+const VIEW_OPTIONS: Array<{ value: ViewMode; label: string; icon: typeof Columns3 }> = [
+  { value: "kanban", label: "Kanban", icon: Columns3 },
+  { value: "list", label: "Lista", icon: List },
+  { value: "activities", label: "Actividades", icon: ListChecks },
+  { value: "calendar", label: "Calendario", icon: CalendarDays },
+];
+const safeViewMode = (value: string | null): ViewMode => VIEW_OPTIONS.some((item) => item.value === value) ? value as ViewMode : "kanban";
 
 export const NegociacionesKanban = () => {
   const { profile } = useAuth();
-  const { isAgent } = usePermissions();
+  const { isAgent, isSupervisor, isManager, isSuperAdmin, isAuditMode, canDelete, isCompliance } = usePermissions();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [agents, setAgents] = useState<Profile[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingDealId, setEditingDealId] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [formError, setFormError] = useState("");
-  const [formData, setFormData] = useState({ name: "", value: "", lead_id: "", stage: "Nuevo lead" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>(() => safeViewMode(localStorage.getItem(VIEW_KEY)));
+  const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState("");
+  const [agentFilter, setAgentFilter] = useState("");
+  const [dragOverStage, setDragOverStage] = useState<PipelineStage | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [dealFormOpen, setDealFormOpen] = useState(false);
+  const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  const [preferredLead, setPreferredLead] = useState<Lead | null>(null);
+  const [closingDeal, setClosingDeal] = useState<Deal | null>(null);
+  const [closeTarget, setCloseTarget] = useState<"Ganado" | "Perdido" | null>(null);
+  const [postponingActivity, setPostponingActivity] = useState<Activity | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
+  const canMutate = !isAuditMode && !isCompliance;
 
-  const fetchDealsAndLeads = useCallback(async () => {
-    try {
-      setLoading(true);
-      let dealsQuery = supabase.from("deals").select("*").limit(3000);
-      let leadsQuery = supabase.from("leads").select("*").limit(3000);
-
-      if (isAgent && profile?.id) {
-        dealsQuery = dealsQuery.eq("agent_id", profile.id);
-        leadsQuery = leadsQuery.eq("agent_id", profile.id);
-      } else if (profile?.team_id && !isAgent) {
-        dealsQuery = dealsQuery.eq("team_id", profile.team_id);
-        leadsQuery = leadsQuery.eq("team_id", profile.team_id);
-      }
-
-      const [dealsRes, leadsRes] = await Promise.all([dealsQuery, leadsQuery]);
-      if (dealsRes.data) setDeals(dealsRes.data as Deal[]);
-      if (leadsRes.data) setLeads(leadsRes.data as Lead[]);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+  const fetchData = useCallback(async (showLoader = true) => {
+    if (!profile) return;
+    if (showLoader) setLoading(true);
+    setError("");
+    let dealsQuery = supabase.from("deals").select("*").order("updated_at", { ascending: false }).limit(5000);
+    let leadsQuery = supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(5000);
+    let activitiesQuery = supabase.from("activities").select("*").order("created_at", { ascending: false }).limit(5000);
+    if (profile.role === "AGENT") {
+      dealsQuery = dealsQuery.eq("agent_id", profile.id);
+      leadsQuery = leadsQuery.eq("agent_id", profile.id);
+      activitiesQuery = activitiesQuery.eq("user_id", profile.id);
+    } else if (isAuditMode && profile.role === "SUPERVISOR" && profile.team_id) {
+      dealsQuery = dealsQuery.eq("team_id", profile.team_id);
+      leadsQuery = leadsQuery.eq("team_id", profile.team_id);
     }
-  }, [profile, isAgent]);
+    const [dealResult, leadResult, activityResult, profileResult] = await Promise.all([
+      dealsQuery,
+      leadsQuery,
+      activitiesQuery,
+      supabase.from("profiles").select("*").eq("active", true).order("first_name"),
+    ]);
+    const firstError = dealResult.error || leadResult.error || activityResult.error || profileResult.error;
+    if (firstError) setError(firstError.message || "No se pudo cargar el pipeline.");
+    else {
+      setDeals((dealResult.data ?? []) as Deal[]);
+      setLeads((leadResult.data ?? []) as Lead[]);
+      setActivities((activityResult.data ?? []) as Activity[]);
+      setAgents((profileResult.data ?? []) as Profile[]);
+    }
+    if (showLoader) setLoading(false);
+  }, [isAuditMode, profile]);
 
   useEffect(() => {
-    if (profile) fetchDealsAndLeads();
-  }, [fetchDealsAndLeads]);
+    void fetchData();
+    if (!profile?.id) return;
+    const channel = supabase
+      .channel(`pipeline_${profile.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "deals" }, () => void fetchData(false))
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => void fetchData(false))
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [fetchData, profile?.id]);
 
-  // ✅ NUEVO: Sync desde prospectos - si un lead no tiene deal asociado, lo incluimos en Kanban como "Nuevo lead"
-  const leadsWithoutDeal = leads.filter(l => !deals.some(d => d.lead_id === l.id));
+  useEffect(() => { localStorage.setItem(VIEW_KEY, viewMode); }, [viewMode]);
 
-  const [confirmModal, setConfirmModal] = useState<{isOpen: boolean; targetId: string; targetName: string}>({
-    isOpen: false, targetId: "", targetName: ""
-  });
+  const activeLeads = useMemo(() => leads.filter((lead) => !lead.is_burned), [leads]);
+  const burnedLeadIds = useMemo(() => new Set(leads.filter((lead) => lead.is_burned).map((lead) => lead.id)), [leads]);
+  const activeDeals = useMemo(() => deals.filter((deal) => !deal.lead_id || !burnedLeadIds.has(deal.lead_id)), [burnedLeadIds, deals]);
+  const eligibleAgents = useMemo(() => agents.filter((agent) => {
+    if (agent.role !== "AGENT") return false;
+    if (isSuperAdmin) return true;
+    if (isManager) return agent.department === profile?.department;
+    if (isSupervisor) return Boolean(profile?.team_id && agent.team_id === profile.team_id);
+    return agent.id === profile?.id;
+  }), [agents, isManager, isSuperAdmin, isSupervisor, profile?.department, profile?.id, profile?.team_id]);
 
-  const confirmDeleteDeal = async () => {
-    const { error } = await supabase.from("deals").delete().eq("id", confirmModal.targetId);
-    if (!error) {
-      setDeals(prev => prev.filter(d => d.id !== confirmModal.targetId));
-    }
-  };
-
-  // ✅ NUEVO: Eliminar deal
-  const handleDeleteDeal = (dealId: string, dealName: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setConfirmModal({ isOpen: true, targetId: dealId, targetName: dealName });
-  };
-
-  const handleDragStart = (e: React.DragEvent, dealId: string) => { e.dataTransfer.setData("text/plain", dealId); };
-  const handleDragOver = (e: React.DragEvent, stage: Stage) => { e.preventDefault(); setDragOverStage(stage); };
-  const handleDragLeave = () => setDragOverStage(null);
-
-  const handleDrop = async (e: React.DragEvent, targetStage: Stage) => {
-    e.preventDefault();
-    setDragOverStage(null);
-    const dealId = e.dataTransfer.getData("text/plain");
-    if (!dealId || !profile) return;
-    const deal = deals.find((d) => d.id === dealId);
-    if (!deal || deal.stage === targetStage) return;
-    const nextLeadStatus = STAGE_TO_LEAD_STATUS[targetStage];
-
-    setDeals(deals.map((d) => (d.id === dealId ? { ...d, stage: targetStage as any } : d)));
-    if (deal.lead_id) {
-      setLeads((current) => current.map((lead) => (
-        lead.id === deal.lead_id ? { ...lead, status: nextLeadStatus } : lead
-      )));
-    }
-
-    try {
-      const { error } = await supabase.from("deals").update({ stage: targetStage }).eq("id", dealId);
-      if (error) {
-        fetchDealsAndLeads();
-        return;
-      }
-
-      await supabase.from("activities").insert({
-        deal_id: dealId,
-        lead_id: deal.lead_id,
-        user_id: profile.id,
-        description: `Negociación "${deal.name}" movida a: ${targetStage}; prospecto sincronizado a: ${nextLeadStatus}`,
-        type: "stage_change",
-      });
-    } catch {
-      fetchDealsAndLeads();
-    }
-  };
-
-  const openCreateDeal = (lead?: Lead) => {
-    const importedAmount = Number(lead?.raw_data?._crm_deposit_amount ?? 0);
-    setEditingDealId(null);
-    setFormError("");
-    setFormData({
-      name: lead ? `${lead.first_name} ${lead.last_name}`.trim() : "",
-      value: importedAmount > 0 ? String(importedAmount) : "",
-      lead_id: lead?.id ?? leads[0]?.id ?? "",
-      stage: "Nuevo lead",
+  const filteredDeals = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return activeDeals.filter((deal) => {
+      if (stageFilter && deal.stage !== stageFilter) return false;
+      if (agentFilter && deal.agent_id !== agentFilter) return false;
+      if (!term) return true;
+      const lead = activeLeads.find((item) => item.id === deal.lead_id);
+      return `${deal.name} ${lead?.first_name ?? ""} ${lead?.last_name ?? ""} ${lead?.email ?? ""} ${lead?.phone ?? ""}`.toLowerCase().includes(term);
     });
-    setIsFormOpen(true);
+  }, [activeDeals, activeLeads, agentFilter, search, stageFilter]);
+
+  const leadsWithoutDeal = useMemo(() => {
+    const linkedIds = new Set(activeDeals.map((deal) => deal.lead_id).filter(Boolean));
+    const term = search.trim().toLowerCase();
+    return activeLeads.filter((lead) => {
+      if (linkedIds.has(lead.id)) return false;
+      if (agentFilter && lead.agent_id !== agentFilter) return false;
+      if (!term) return true;
+      return `${lead.first_name} ${lead.last_name} ${lead.email ?? ""} ${lead.phone ?? ""}`.toLowerCase().includes(term);
+    });
+  }, [activeDeals, activeLeads, agentFilter, search]);
+
+  const scheduledActivities = useMemo(() => activities.filter((activity) => Boolean(activity.due_at)), [activities]);
+  const selectedDeal = useMemo(() => activeDeals.find((deal) => deal.id === selectedDealId) ?? null, [activeDeals, selectedDealId]);
+  const selectedLead = selectedDeal?.lead_id ? activeLeads.find((lead) => lead.id === selectedDeal.lead_id) : undefined;
+  const selectedAgent = selectedDeal?.agent_id ? agents.find((agent) => agent.id === selectedDeal.agent_id) : undefined;
+  const selectedActivities = activities.filter((activity) => activity.deal_id === selectedDealId);
+
+  const metrics = useMemo(() => {
+    const active = activeDeals.filter((deal) => ACTIVE_STAGES.some((stage) => stage === deal.stage));
+    const won = activeDeals.filter((deal) => deal.stage === "Ganado");
+    const lost = activeDeals.filter((deal) => deal.stage === "Perdido");
+    return {
+      pipeline: active.reduce((sum, deal) => sum + Number(deal.value || 0), 0),
+      won: won.reduce((sum, deal) => sum + Number(deal.value || 0), 0),
+      commission: won.reduce((sum, deal) => sum + Number(deal.value || 0), 0) * 0.05,
+      lost: lost.length,
+    };
+  }, [activeDeals]);
+
+  useEffect(() => {
+    if (!profile?.id || isAuditMode) return;
+    const timers: number[] = [];
+    scheduledActivities
+      .filter((activity) => activity.user_id === profile.id && activity.reminder_at && activity.status !== "completed" && !activity.completed_at)
+      .forEach((activity) => {
+        const delay = new Date(activity.reminder_at as string).getTime() - Date.now();
+        const storageKey = `activity-reminder-${activity.id}-${activity.reminder_at}`;
+        if (delay <= 0 || delay > MAX_REMINDER_DELAY || sessionStorage.getItem(storageKey)) return;
+        timers.push(window.setTimeout(async () => {
+          sessionStorage.setItem(storageKey, "sent");
+          await supabase.from("notifications").insert({ user_id: profile.id, title: "Recordatorio de actividad", content: activity.title || activity.description, metadata: { activity_id: activity.id, deal_id: activity.deal_id } });
+        }, delay));
+      });
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [isAuditMode, profile?.id, scheduledActivities]);
+
+  const openDeal = async (deal: Deal) => {
+    setSelectedDealId(deal.id);
+    setWorkspaceOpen(true);
+    const { data } = await supabase.from("notes").select("*").eq("deal_id", deal.id).order("created_at", { ascending: false });
+    setNotes((data ?? []) as Note[]);
   };
 
+  const openCreateDeal = (lead: Lead | null = null) => {
+    if (!canMutate) return;
+    setEditingDeal(null); setPreferredLead(lead); setDealFormOpen(true);
+  };
   const openEditDeal = (deal: Deal) => {
-    setEditingDealId(deal.id);
-    setFormError("");
-    setFormData({
-      name: deal.name,
-      value: deal.value > 0 ? String(deal.value) : "",
-      lead_id: deal.lead_id ?? "",
-      stage: deal.stage,
+    if (!canMutate) return;
+    setEditingDeal(deal); setPreferredLead(null); setDealFormOpen(true);
+  };
+
+  const logActivity = async (payload: Partial<Activity> & Pick<Activity, "description" | "type">) => {
+    if (!profile?.id) return null;
+    const { data } = await supabase.from("activities").insert({ user_id: profile.id, status: "completed", completed_at: new Date().toISOString(), ...payload }).select().single();
+    if (data) setActivities((current) => [data as Activity, ...current]);
+    return data as Activity | null;
+  };
+
+  const saveDeal = async (payload: DealFormPayload) => {
+    if (!profile?.id || !canMutate) return;
+    setSaving(true); setError("");
+    if (editingDeal) {
+      const { data, error: updateError } = await supabase.from("deals").update(payload).eq("id", editingDeal.id).select().single();
+      if (updateError) { setError(updateError.message); setSaving(false); return; }
+      const updated = data as Deal;
+      setDeals((current) => current.map((deal) => deal.id === updated.id ? updated : deal));
+      await logActivity({ deal_id: updated.id, lead_id: updated.lead_id, title: "Negociación actualizada", description: `Se actualizaron los datos de ${updated.name}.`, type: "update" });
+    } else {
+      const { data, error: insertError } = await supabase.from("deals").insert(payload).select().single();
+      if (insertError) { setError(insertError.message); setSaving(false); return; }
+      const created = data as Deal;
+      setDeals((current) => [created, ...current]);
+      await logActivity({ deal_id: created.id, lead_id: created.lead_id, title: "Negociación creada", description: `Se creó ${created.name} con un importe de ${formatCurrency(created.value, created.currency)}.`, type: "creation" });
+    }
+    setSaving(false); setDealFormOpen(false); setEditingDeal(null); setPreferredLead(null);
+  };
+
+  const updateActiveStage = async (deal: Deal, stage: PipelineStage) => {
+    if (!canMutate || deal.stage === stage) return;
+    setSaving(true);
+    const { data, error: updateError } = await supabase.from("deals").update({ stage, closed_at: null, close_reason: null, loss_reason: null }).eq("id", deal.id).select().single();
+    setSaving(false);
+    if (updateError) { setError(updateError.message); return; }
+    const updated = data as Deal;
+    setDeals((current) => current.map((item) => item.id === updated.id ? updated : item));
+    await logActivity({ deal_id: deal.id, lead_id: deal.lead_id, title: "Etapa actualizada", description: `${deal.name} pasó de ${deal.stage} a ${stage}.`, type: "stage_change" });
+  };
+
+  const requestStageChange = (deal: Deal, stage: PipelineStage) => {
+    if (!canMutate || deal.stage === stage) return;
+    if (stage === "Ganado" || stage === "Perdido") { setClosingDeal(deal); setCloseTarget(stage); return; }
+    void updateActiveStage(deal, stage);
+  };
+
+  const closeDeal = async (payload: { finalAmount: number; closeReason: string; lossReason: string }) => {
+    if (!closingDeal || !closeTarget || !canMutate) return;
+    setSaving(true);
+    const { data, error: closeError } = await supabase.from("deals").update({
+      stage: closeTarget,
+      value: closeTarget === "Ganado" ? payload.finalAmount : closingDeal.value,
+      closed_at: new Date().toISOString(),
+      close_reason: payload.closeReason || null,
+      loss_reason: closeTarget === "Perdido" ? payload.lossReason : null,
+    }).eq("id", closingDeal.id).select().single();
+    setSaving(false);
+    if (closeError) { setError(closeError.message); return; }
+    const updated = data as Deal;
+    setDeals((current) => current.map((deal) => deal.id === updated.id ? updated : deal));
+    await logActivity({
+      deal_id: updated.id, lead_id: updated.lead_id,
+      title: closeTarget === "Ganado" ? "Negociación ganada" : "Negociación perdida",
+      description: closeTarget === "Ganado" ? `Cierre confirmado por ${formatCurrency(updated.value, updated.currency)}. ${payload.closeReason}`.trim() : `Motivo: ${payload.lossReason}. ${payload.closeReason}`.trim(),
+      type: closeTarget === "Ganado" ? "deal_won" : "deal_lost",
     });
-    setIsFormOpen(true);
+    setCloseTarget(null); setClosingDeal(null);
   };
 
-  const handleSaveDeal = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!profile) return;
-    const value = Number(formData.value);
-    if (!Number.isFinite(value) || value <= 0) {
-      setFormError("Captura un monto de depósito mayor a cero.");
-      return;
-    }
-
-    setIsSaving(true);
-    setFormError("");
-    try {
-      const selectedLead = leads.find((lead) => lead.id === formData.lead_id);
-      const nextLeadStatus = STAGE_TO_LEAD_STATUS[formData.stage as Stage];
-      const payload = {
-        name: formData.name,
-        value,
-        stage: formData.stage,
-        lead_id: formData.lead_id || null,
-        agent_id: selectedLead?.agent_id ?? profile.id,
-        team_id: selectedLead?.team_id ?? profile.team_id ?? null,
-      };
-
-      if (editingDealId) {
-        const { data, error } = await supabase
-          .from("deals")
-          .update(payload)
-          .eq("id", editingDealId)
-          .select()
-          .single();
-        if (error) throw error;
-
-        if (data.lead_id) {
-          setLeads((current) => current.map((lead) => (
-            lead.id === data.lead_id ? { ...lead, status: nextLeadStatus } : lead
-          )));
-        }
-
-        setDeals((current) => current.map((deal) => deal.id === editingDealId ? data as Deal : deal));
-        setIsFormOpen(false);
-        await supabase.from("activities").insert({
-          deal_id: editingDealId,
-          lead_id: data.lead_id || null,
-          user_id: profile.id,
-          description: `Negociación actualizada: "${data.name}" por $${data.value}`,
-          type: "update",
-        });
-        return;
-      }
-
-      const { data, error } = await supabase.from("deals").insert(payload).select().single();
-      if (error) throw error;
-
-      if (data.lead_id) {
-        setLeads((current) => current.map((lead) => (
-          lead.id === data.lead_id ? { ...lead, status: nextLeadStatus } : lead
-        )));
-      }
-
-      setDeals((current) => [...current, data as Deal]);
-      setIsFormOpen(false);
-      await supabase.from("activities").insert({
-        deal_id: data.id,
-        lead_id: data.lead_id || null,
-        user_id: profile.id,
-        description: `Negociación creada: "${data.name}" por $${data.value}`,
-        type: "creation",
-      });
-    } catch (err) {
-      console.error(err);
-      setFormError("No se pudo guardar la negociación. Intenta nuevamente.");
-    } finally {
-      setIsSaving(false);
-    }
+  const handleDrop = (event: React.DragEvent, stage: PipelineStage) => {
+    event.preventDefault(); setDragOverStage(null);
+    const deal = activeDeals.find((item) => item.id === event.dataTransfer.getData("dealId"));
+    if (deal) requestStageChange(deal, stage);
   };
 
-  const totalPipeline = deals.filter((d) => !["Ganado","Perdido"].includes(d.stage)).reduce((sum, d) => sum + Number(d.value || 0), 0);
-  
-  const wonDeals = deals.filter((d) => d.stage === "Ganado");
-  const totalWon = wonDeals.reduce((sum, d) => sum + Number(d.value || 0), 0);
-  
-  // Calcular porcentaje de comisión
-  const wonDealsCount = wonDeals.length;
-  let commissionPercentage = 0;
-  if (wonDealsCount >= 1 && wonDealsCount <= 3) commissionPercentage = 0.10;
-  else if (wonDealsCount >= 4 && wonDealsCount <= 6) commissionPercentage = 0.15;
-  else if (wonDealsCount >= 7) commissionPercentage = 0.20;
+  const createActivity = async (draft: ActivityDraft) => {
+    if (!selectedDeal || !profile?.id || !canMutate) return;
+    setSaving(true);
+    const dueAt = new Date(draft.dueAt);
+    const reminderAt = new Date(dueAt.getTime() - draft.reminderMinutes * 60 * 1000);
+    const { data, error: activityError } = await supabase.from("activities").insert({
+      deal_id: selectedDeal.id, lead_id: selectedDeal.lead_id, user_id: profile.id,
+      title: draft.title.trim(), description: draft.description.trim() || draft.title.trim(), type: "task",
+      due_at: dueAt.toISOString(), reminder_at: reminderAt.toISOString(), status: "pending",
+      metadata: { reminder_minutes: draft.reminderMinutes },
+    }).select().single();
+    setSaving(false);
+    if (activityError) throw activityError;
+    setActivities((current) => [data as Activity, ...current]);
+  };
 
-  const totalCommissions = totalWon * commissionPercentage;
+  const completeActivity = async (activity: Activity) => {
+    if (!canMutate) return;
+    const { data, error: updateError } = await supabase.from("activities").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", activity.id).select().single();
+    if (updateError) { setError(updateError.message); return; }
+    setActivities((current) => current.map((item) => item.id === activity.id ? data as Activity : item));
+  };
 
-  // ✅ NUEVO: contador depósitos perdidos
-  const lostCount = deals.filter((d) => d.stage === "Perdido").length;
+  const postponeActivity = async (dueAt: string) => {
+    if (!postponingActivity || !canMutate) return;
+    setSaving(true);
+    const reminderMinutes = Number(postponingActivity.metadata?.reminder_minutes ?? 30);
+    const dueDate = new Date(dueAt);
+    const { data, error: updateError } = await supabase.from("activities").update({
+      due_at: dueDate.toISOString(), reminder_at: new Date(dueDate.getTime() - reminderMinutes * 60 * 1000).toISOString(),
+      status: "postponed", completed_at: null,
+    }).eq("id", postponingActivity.id).select().single();
+    setSaving(false);
+    if (updateError) { setError(updateError.message); return; }
+    setActivities((current) => current.map((item) => item.id === postponingActivity.id ? data as Activity : item));
+    setPostponingActivity(null);
+  };
 
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center p-20">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 rounded-full border-2 border-[rgba(212,175,55,0.2)] border-t-[#D4AF37] animate-spin" />
-          <span className="text-xs text-[#4A6080] tracking-wider">Cargando pipeline...</span>
-        </div>
-      </div>
-    );
-  }
+  const createNote = async (content: string, files: File[]) => {
+    if (!selectedDeal || !profile?.id || !canMutate) return;
+    setSaving(true);
+    const uploaded = await Promise.all(files.map((file) => uploadAttachment(file, profile.id, `deals/${selectedDeal.id}`)));
+    const { data, error: noteError } = await supabase.from("notes").insert({
+      deal_id: selectedDeal.id, lead_id: selectedDeal.lead_id, user_id: profile.id,
+      content: content.trim() || "Archivo adjunto", attachments: uploaded,
+    }).select().single();
+    if (noteError) {
+      await Promise.allSettled(uploaded.map(removeAttachment)); setSaving(false); throw noteError;
+    }
+    setNotes((current) => [data as Note, ...current]); setSaving(false);
+  };
+
+  const confirmDelete = async () => {
+    if (!confirmTarget || !canMutate) return;
+    if (confirmTarget.type === "deal") {
+      const { error: deleteError } = await supabase.from("deals").delete().eq("id", confirmTarget.id);
+      if (deleteError) setError(deleteError.message);
+      else { setDeals((current) => current.filter((deal) => deal.id !== confirmTarget.id)); if (selectedDealId === confirmTarget.id) setWorkspaceOpen(false); }
+    } else {
+      const { error: deleteError } = await supabase.from("activities").delete().eq("id", confirmTarget.id);
+      if (deleteError) setError(deleteError.message);
+      else setActivities((current) => current.filter((activity) => activity.id !== confirmTarget.id));
+    }
+    setConfirmTarget(null);
+  };
+
+  const clearFilters = () => { setSearch(""); setStageFilter(""); setAgentFilter(""); };
+  if (loading) return <div className="app-page grid min-h-[60vh] place-items-center"><div className="text-center"><span className="mx-auto mb-3 block h-9 w-9 animate-spin rounded-full border-2 border-primary border-t-transparent" /><p className="text-sm text-muted-foreground">Cargando pipeline…</p></div></div>;
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Page Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-[rgba(212,175,55,0.1)] flex flex-col gap-4">
-        <div className="flex justify-between items-start gap-4">
-          <div>
-            <h1 className="text-xl font-title font-bold text-[#F8FAFC] tracking-tight">Pipeline de Negociaciones</h1>
-            <p className="text-xs text-[#4A6080] mt-0.5">Arrastra los deals entre columnas para actualizar su etapa</p>
-          </div>
-          <button
-            onClick={() => openCreateDeal()}
-            className="gold-button-primary flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-lg shrink-0"
-          >
-            <Plus className="h-3.5 w-3.5" /> Nueva Negociación
-          </button>
-        </div>
+    <section className="app-page" aria-labelledby="pipeline-title">
+      <header className="app-page-header">
+        <div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">Operación comercial</p><h1 id="pipeline-title" className="font-title text-2xl font-bold text-foreground sm:text-3xl">Pipeline de negociaciones</h1><p className="mt-1 text-sm text-muted-foreground">Mueve etapas, programa seguimientos y conserva el contexto completo de cada operación.</p></div>
+        {canMutate && <button type="button" onClick={() => openCreateDeal()} className="gold-button-primary inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-sm font-bold"><Plus className="h-4 w-4" /> Nueva negociación</button>}
+      </header>
+      {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive"><span>{error}</span><button type="button" onClick={() => setError("")} className="font-semibold underline">Cerrar</button></div>}
 
-        {/* Pipeline summary strip — ahora incluye depósitos perdidos */}
-        <div className="flex items-center gap-6 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <TrendingUp className="h-3.5 w-3.5 text-[#D4AF37]" />
-            <span className="text-[11px] text-[#6B7FA3]">Pipeline activo:</span>
-            <span className="text-[11px] font-bold font-mono-numbers text-[#D4AF37]">
-              ${totalPipeline.toLocaleString("es-MX", { maximumFractionDigits: 0 })}
-            </span>
-          </div>
-          <div className="w-px h-3 bg-[rgba(212,175,55,0.2)]" />
-          <div className="flex items-center gap-1.5">
-            <span className="live-dot" style={{ background: "#22C55E" }} />
-            <span className="text-[11px] text-[#6B7FA3]">Ganado:</span>
-            <span className="text-[11px] font-bold font-mono-numbers text-[#22C55E]">
-              ${totalWon.toLocaleString("es-MX", { maximumFractionDigits: 0 })}
-            </span>
-          </div>
-          <div className="w-px h-3 bg-[rgba(212,175,55,0.2)]" />
-          <div className="flex items-center gap-1.5" title={`${(commissionPercentage * 100).toFixed(0)}% sobre capital captado`}>
-            <DollarSign className="h-3.5 w-3.5 text-[#22C55E]" />
-            <span className="text-[11px] text-[#6B7FA3]">Comisiones:</span>
-            <span className="text-[11px] font-bold font-mono-numbers text-[#22C55E]">
-              ${totalCommissions.toLocaleString("es-MX", { maximumFractionDigits: 0 })}
-            </span>
-          </div>
-          <div className="w-px h-3 bg-[rgba(212,175,55,0.2)]" />
-          {/* ✅ NUEVO: Depósitos perdidos visibles en el header del Kanban */}
-          <div className="flex items-center gap-1.5">
-            <XCircle className="h-3.5 w-3.5 text-[#EF4444]" />
-            <span className="text-[11px] text-[#6B7FA3]">Dep. perdidos:</span>
-            <span className="text-[11px] font-bold font-mono-numbers text-[#EF4444]">{lostCount}</span>
-          </div>
-          <div className="w-px h-3 bg-[rgba(212,175,55,0.2)]" />
-          <span className="text-[11px] text-[#4A6080]">{deals.length} deals totales</span>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: "Pipeline activo", value: formatCurrency(metrics.pipeline), icon: TrendingUp, tone: "text-primary" },
+          { label: "Ganado", value: formatCurrency(metrics.won), icon: Trophy, tone: "text-emerald-600 dark:text-emerald-400" },
+          { label: "Comisión estimada", value: formatCurrency(metrics.commission), icon: DollarSign, tone: "text-cyan-600 dark:text-cyan-400" },
+          { label: "Operaciones perdidas", value: String(metrics.lost), icon: XCircle, tone: "text-destructive" },
+        ].map((metric) => <div key={metric.label} className="app-panel flex items-center gap-3 p-4"><span className={`grid h-10 w-10 place-items-center rounded-lg bg-muted ${metric.tone}`}><metric.icon className="h-5 w-5" /></span><div><p className="text-xs text-muted-foreground">{metric.label}</p><p className="text-lg font-bold tabular-nums text-foreground">{metric.value}</p></div></div>)}
       </div>
 
-      {/* Kanban Board */}
-      <div className="flex-1 overflow-x-auto">
-        <div className="flex gap-3 p-4 h-full min-h-[calc(100vh-200px)] select-none">
-          {STAGES.map((stage) => {
-            const cfg = STAGE_CONFIG[stage];
-            const stageDeals = deals.filter((d) => d.stage === stage);
-            const totalValue = stageDeals.reduce((sum, d) => sum + Number(d.value || 0), 0);
-            const isDragTarget = dragOverStage === stage;
-            // ✅ NUEVO: en columna "Nuevo lead", también mostrar prospectos sin deal
-            const showLeadPrompts = stage === "Nuevo lead";
-
-            return (
-              <div
-                key={stage}
-                onDragOver={(e) => handleDragOver(e, stage)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, stage)}
-                className="flex-shrink-0 w-60 flex flex-col rounded-xl transition-all duration-200"
-                style={{
-                  background: isDragTarget ? cfg.bg : "rgba(8,14,28,0.6)",
-                  border: `1px solid ${isDragTarget ? cfg.color : "rgba(255,255,255,0.05)"}`,
-                  boxShadow: isDragTarget ? `0 0 20px ${cfg.color}22, inset 0 0 20px ${cfg.color}08` : "none",
-                }}
-              >
-                {/* Column Header */}
-                <div
-                  className="px-3.5 pt-3 pb-2.5 rounded-t-xl"
-                  style={{ borderBottom:"1px solid rgba(255,255,255,0.05)", borderTop:`2px solid ${cfg.color}`, background:`linear-gradient(180deg, ${cfg.color}10 0%, transparent 100%)` }}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-sm shrink-0" style={{ color: cfg.color }}>{cfg.emoji}</span>
-                      <h3 className="text-[10px] font-bold tracking-wider uppercase truncate" style={{ color: cfg.color }}>{stage}</h3>
-                    </div>
-                    <span className={`h-5 min-w-5 px-1.5 flex items-center justify-center rounded-full text-[10px] font-bold shrink-0 ${cfg.badge}`}>
-                      {stageDeals.length + (showLeadPrompts ? leadsWithoutDeal.length : 0)}
-                    </span>
-                  </div>
-                  <div className="mt-1.5 font-mono-numbers text-[10px] font-semibold text-[#334155]">
-                    ${totalValue.toLocaleString("es-MX", { maximumFractionDigits: 0 })}
-                  </div>
-                </div>
-
-                {/* Cards */}
-                <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                  {stageDeals.map((deal) => {
-                    const lead = leads.find((l) => l.id === deal.lead_id);
-                    return <DealCard key={deal.id} deal={deal} lead={lead} stageColor={cfg.color} onDragStart={handleDragStart} onEdit={openEditDeal} onDelete={handleDeleteDeal} canDelete={!isAgent} />;
-                  })}
-
-                  {/* ✅ NUEVO: Prospectos sin deal en columna Nuevo lead */}
-                  {showLeadPrompts && leadsWithoutDeal.map((lead) => (
-                    <div
-                      key={`lead-${lead.id}`}
-                      className="group rounded-xl p-3 transition-all duration-150 cursor-pointer hover:-translate-y-0.5"
-                      style={{ background:"rgba(10,18,36,0.5)", border:"1px dashed rgba(100,116,139,0.4)", borderLeft:"3px solid #64748B" }}
-                      title="Clic para capturar el depósito y crear la negociación"
-                      onClick={() => openCreateDeal(lead)}
-                    >
-                      <p className="text-[10px] font-semibold text-[#64748B] truncate mb-1">{lead.first_name} {lead.last_name}</p>
-                      <p className="text-[9px] text-[#334155]">Capturar depósito y crear deal</p>
-                    </div>
-                  ))}
-
-                  {stageDeals.length === 0 && !(showLeadPrompts && leadsWithoutDeal.length > 0) && (
-                    <div
-                      className="mt-2 rounded-lg py-8 text-center"
-                      style={{ border:`1px dashed ${isDragTarget ? cfg.color : "rgba(255,255,255,0.06)"}`, background: isDragTarget ? cfg.bg : "transparent" }}
-                    >
-                      <p className="text-[10px]" style={{ color: isDragTarget ? cfg.color : "#334155" }}>
-                        {isDragTarget ? "Suelta aquí" : "Sin deals"}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      <div className="app-panel grid gap-3 p-3 lg:grid-cols-[minmax(240px,1fr)_180px_200px_auto]">
+        <label className="relative"><span className="sr-only">Buscar negociación</span><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar negociación, prospecto, teléfono…" className="h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /></label>
+        <select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)} aria-label="Filtrar por etapa" className="h-11 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="">Todas las etapas</option>{PIPELINE_STAGES.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select>
+        <select value={agentFilter} onChange={(event) => setAgentFilter(event.target.value)} aria-label="Filtrar por agente" className="h-11 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="">Todos los agentes</option>{eligibleAgents.map((agent) => <option key={agent.id} value={agent.id}>{agent.first_name} {agent.last_name}</option>)}</select>
+        <button type="button" onClick={clearFilters} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold hover:bg-accent"><FilterX className="h-4 w-4" /> Limpiar</button>
       </div>
 
-      {/* Modal */}
-      {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(5,8,20,0.75)] backdrop-blur-md p-4">
-          <form
-            onSubmit={handleSaveDeal}
-            className="w-full max-w-md rounded-2xl p-7 space-y-5"
-            style={{ background:"rgba(8,15,32,0.95)", border:"1px solid rgba(212,175,55,0.18)", boxShadow:"0 24px 64px rgba(0,0,0,0.7)" }}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-title font-semibold text-[#E2E8F0]">{editingDealId ? "Editar Negociación" : "Nueva Negociación"}</h3>
-                <p className="text-[11px] text-[#4A6080] mt-0.5">Captura el depósito que alimentará los totales del pipeline</p>
-              </div>
-              <button type="button" onClick={() => setIsFormOpen(false)} className="h-7 w-7 flex items-center justify-center rounded-lg text-[#4A6080] hover:text-[#F8FAFC] hover:bg-[rgba(255,255,255,0.06)] transition-all">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="h-px bg-gradient-to-r from-transparent via-[rgba(212,175,55,0.2)] to-transparent" />
-
-            <FormField label="Nombre del Deal">
-              <input type="text" required placeholder="Ej. Inversión Capital FX" value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3.5 py-2.5 text-sm bg-[rgba(5,8,20,0.7)] border border-[rgba(212,175,55,0.12)] rounded-lg text-[#E2E8F0] placeholder-[#334155] focus:outline-none focus:border-[rgba(212,175,55,0.4)] transition-all"
-              />
-            </FormField>
-
-            <FormField label="Monto de depósito (USD)">
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#D4AF37]"><DollarSign className="h-3.5 w-3.5" /></span>
-                <input type="number" required min="0.01" step="0.01" inputMode="decimal" value={formData.value}
-                  onChange={(e) => { setFormData({ ...formData, value: e.target.value }); setFormError(""); }}
-                  onBlur={() => {
-                    const amount = Number(formData.value);
-                    if (formData.value && (!Number.isFinite(amount) || amount <= 0)) {
-                      setFormError("Captura un monto de depósito mayor a cero.");
-                    }
-                  }}
-                  aria-describedby={formError ? "deal-form-error" : undefined}
-                  className="w-full pl-8 pr-3.5 py-2.5 text-sm bg-[rgba(5,8,20,0.7)] border border-[rgba(212,175,55,0.12)] rounded-lg text-[#D4AF37] font-mono-numbers focus:outline-none focus:border-[rgba(212,175,55,0.4)] transition-all"
-                />
-              </div>
-            </FormField>
-
-            <FormField label="Prospecto Asociado">
-              <select value={formData.lead_id} onChange={(e) => setFormData({ ...formData, lead_id: e.target.value })}
-                className="w-full px-3.5 py-2.5 text-sm bg-[rgba(5,8,20,0.7)] border border-[rgba(212,175,55,0.12)] rounded-lg text-[#94A3B8] focus:outline-none focus:border-[rgba(212,175,55,0.4)] transition-all"
-              >
-                <option value="">— Sin asociar —</option>
-                {leads.map((l) => (<option key={l.id} value={l.id}>{l.first_name} {l.last_name}</option>))}
-              </select>
-            </FormField>
-
-            <FormField label="Etapa Inicial">
-              <div className="grid grid-cols-2 gap-2">
-                {STAGES.filter((s) => !["Ganado","Perdido"].includes(s)).map((s) => {
-                  const c = STAGE_CONFIG[s];
-                  const isSelected = formData.stage === s;
-                  return (
-                    <button key={s} type="button" onClick={() => setFormData({ ...formData, stage: s })}
-                      className="px-2 py-1.5 rounded-lg text-[10px] font-semibold text-left transition-all"
-                      style={{ background: isSelected ? `${c.color}18` : "rgba(255,255,255,0.03)", border:`1px solid ${isSelected ? c.color : "rgba(255,255,255,0.06)"}`, color: isSelected ? c.color : "#4A6080" }}
-                    >
-                      {c.emoji} {s}
-                    </button>
-                  );
-                })}
-              </div>
-            </FormField>
-
-            {formError && (
-              <p id="deal-form-error" role="alert" className="text-xs text-red-400 rounded-lg border border-red-500/20 bg-red-950/20 px-3 py-2">
-                {formError}
-              </p>
-            )}
-
-            <div className="flex justify-end gap-2.5 pt-1">
-              <button type="button" onClick={() => setIsFormOpen(false)} className="gold-button-secondary px-4 py-2 text-xs font-semibold rounded-lg">Cancelar</button>
-              <button type="submit" disabled={isSaving} className="gold-button-primary px-5 py-2 text-xs font-bold rounded-lg disabled:opacity-50">
-                {isSaving ? "Guardando..." : editingDealId ? "Guardar cambios" : "Crear negociación"}
-              </button>
-            </div>
-          </form>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div role="tablist" aria-label="Vista del pipeline" className="inline-flex flex-wrap rounded-xl border border-border bg-card p-1">
+          {VIEW_OPTIONS.map((option) => <button key={option.value} type="button" role="tab" aria-selected={viewMode === option.value} onClick={() => setViewMode(option.value)} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition-colors ${viewMode === option.value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}><option.icon className="h-4 w-4" />{option.label}</button>)}
         </div>
-      )}
-      <ConfirmModal
-        isOpen={confirmModal.isOpen}
-        title="Eliminar Negociación"
-        message={`¿Estás seguro de eliminar el deal "${confirmModal.targetName}"? Esta acción es irreversible.`}
-        onConfirm={confirmDeleteDeal}
-        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
-      />
-    </div>
+        <p className="text-xs text-muted-foreground">{filteredDeals.length} negociaciones · {leadsWithoutDeal.length} prospectos por convertir</p>
+      </div>
+
+      {viewMode === "kanban" && <KanbanView deals={filteredDeals} leads={activeLeads} leadsWithoutDeal={leadsWithoutDeal} dragOverStage={dragOverStage} onDragStart={(event, dealId) => { event.dataTransfer.setData("dealId", dealId); event.dataTransfer.effectAllowed = "move"; }} onDragOver={(event, stage) => { if (!canMutate) return; event.preventDefault(); setDragOverStage(stage); }} onDragLeave={() => setDragOverStage(null)} onDrop={handleDrop} onOpenDeal={(deal) => void openDeal(deal)} onEditDeal={openEditDeal} onDeleteDeal={(deal) => setConfirmTarget({ type: "deal", id: deal.id, name: deal.name })} onCreateFromLead={(lead) => openCreateDeal(lead)} canDelete={canDelete} />}
+      {viewMode === "list" && <DealsListView deals={filteredDeals} leads={activeLeads} onOpenDeal={(deal) => void openDeal(deal)} onEditDeal={openEditDeal} onDeleteDeal={(deal) => setConfirmTarget({ type: "deal", id: deal.id, name: deal.name })} canDelete={canDelete} />}
+      {viewMode === "activities" && <ActivitiesView activities={scheduledActivities} deals={activeDeals} onOpenDeal={(deal) => void openDeal(deal)} onComplete={(activity) => void completeActivity(activity)} onPostpone={setPostponingActivity} onDelete={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManage={(activity) => canMutate && activity.user_id === profile?.id} />}
+      {viewMode === "calendar" && <CalendarView activities={scheduledActivities} deals={activeDeals} month={calendarMonth} onMonthChange={setCalendarMonth} onOpenDeal={(deal) => void openDeal(deal)} />}
+
+      <DealWorkspaceSheet open={workspaceOpen} deal={selectedDeal} lead={selectedLead} agent={selectedAgent} activities={selectedActivities} notes={notes} saving={saving} onOpenChange={setWorkspaceOpen} onStageChange={(stage) => selectedDeal && requestStageChange(selectedDeal, stage)} onEdit={openEditDeal} onCreateActivity={createActivity} onCompleteActivity={(activity) => void completeActivity(activity)} onPostponeActivity={setPostponingActivity} onDeleteActivity={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManageActivity={(activity) => canMutate && activity.user_id === profile?.id} onCreateNote={createNote} />
+      <DealFormDialog open={dealFormOpen} saving={saving} deal={editingDeal} preferredLead={preferredLead} leads={activeLeads} agents={eligibleAgents} defaultAgentId={isAgent ? profile?.id : undefined} onOpenChange={setDealFormOpen} onSubmit={saveDeal} />
+      <CloseDealDialog open={Boolean(closeTarget)} saving={saving} deal={closingDeal} targetStage={closeTarget} onOpenChange={(open) => { if (!open) { setCloseTarget(null); setClosingDeal(null); } }} onConfirm={closeDeal} />
+      <PostponeDialog open={Boolean(postponingActivity)} saving={saving} currentDueAt={postponingActivity?.due_at} onOpenChange={(open) => !open && setPostponingActivity(null)} onConfirm={postponeActivity} />
+      <ConfirmModal isOpen={Boolean(confirmTarget)} title={confirmTarget?.type === "deal" ? "Eliminar negociación" : "Eliminar actividad"} message={`¿Deseas eliminar “${confirmTarget?.name ?? "este registro"}”? Esta acción no se puede deshacer.`} onConfirm={() => void confirmDelete()} onCancel={() => setConfirmTarget(null)} />
+    </section>
   );
 };
-
-interface DealCardProps {
-  deal: Deal;
-  lead: Lead | undefined;
-  stageColor: string;
-  onDragStart: (e: React.DragEvent, id: string) => void;
-  onEdit: (deal: Deal) => void;
-  onDelete: (id: string, name: string, e: React.MouseEvent) => void;
-  canDelete: boolean;
-}
-
-const DealCard = ({ deal, lead, stageColor, onDragStart, onEdit, onDelete, canDelete }: DealCardProps) => (
-  <div draggable onDragStart={(e) => onDragStart(e, deal.id)}
-    className="group rounded-xl p-3.5 cursor-grab active:cursor-grabbing transition-all duration-150 hover:-translate-y-0.5 relative"
-    style={{ background:"rgba(10,18,36,0.8)", border:"1px solid rgba(255,255,255,0.06)", borderLeft:`3px solid ${stageColor}`, boxShadow:"0 2px 8px rgba(0,0,0,0.3)" }}
-    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 20px rgba(0,0,0,0.5), 0 0 0 1px ${stageColor}33`; }}
-    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)"; }}
-  >
-    <div className="absolute top-2 right-2 flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onEdit(deal); }}
-        className="h-7 w-7 inline-flex items-center justify-center rounded text-[#64748B] hover:text-[#D4AF37] hover:bg-[rgba(212,175,55,0.1)] transition-all"
-        title="Editar monto"
-        aria-label={`Editar monto de ${deal.name}`}
-      >
-        <Pencil className="h-3 w-3" />
-      </button>
-      {canDelete && (
-      <button
-        type="button"
-        onClick={(e) => onDelete(deal.id, deal.name, e)}
-        className="h-7 w-7 inline-flex items-center justify-center rounded text-[#64748B] hover:text-[#EF4444] hover:bg-[rgba(239,68,68,0.1)] transition-all"
-        title="Eliminar deal"
-        aria-label={`Eliminar ${deal.name}`}
-      >
-        <Trash2 className="h-3 w-3" />
-      </button>
-      )}
-    </div>
-    <p className="text-xs font-semibold text-[#CBD5E1] truncate leading-snug mb-2 pr-16">{deal.name}</p>
-    <div className="flex items-center gap-1 text-sm font-bold font-mono-numbers mb-2" style={{ color: stageColor }}>
-      <span className="text-[10px]">$</span>{Number(deal.value).toLocaleString("es-MX", { maximumFractionDigits: 0 })}
-    </div>
-    {lead && (
-      <div className="flex items-center gap-1.5 text-[10px] text-[#334155]">
-        <User className="h-2.5 w-2.5" />
-        <span className="truncate">{lead.first_name} {lead.last_name}</span>
-      </div>
-    )}
-  </div>
-);
-
-interface FormFieldProps { label: string; children: React.ReactNode; }
-const FormField = ({ label, children }: FormFieldProps) => (
-  <div className="space-y-1.5">
-    <label className="text-[10px] font-bold text-[#4A6080] tracking-[0.12em] uppercase block">{label}</label>
-    {children}
-  </div>
-);

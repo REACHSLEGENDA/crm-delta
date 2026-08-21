@@ -24,6 +24,8 @@ import {
   ShieldCheck,
   LogOut,
   ArrowUpDown,
+  ContactRound,
+  ArchiveX,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -51,7 +53,7 @@ const NavItem = ({ item, onClick }: NavItemProps) => {
         className={`rounded-lg transition-all duration-200 group/navitem ${
           isActive
             ? "nav-item-active"
-            : "text-[#6B7FA3] hover:text-[#D4AF37] hover:bg-[rgba(212,175,55,0.06)]"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         }`}
       >
         <Link
@@ -62,21 +64,21 @@ const NavItem = ({ item, onClick }: NavItemProps) => {
           <div
             className={`flex items-center justify-center h-7 w-7 rounded-md shrink-0 transition-all duration-200 ${
               isActive
-                ? "bg-[rgba(212,175,55,0.15)] text-[#D4AF37] shadow-[0_0_10px_rgba(212,175,55,0.2)]"
-                : "text-current group-hover/navitem:bg-[rgba(212,175,55,0.08)]"
+                ? "bg-primary/15 text-primary shadow-sm"
+                : "text-current group-hover/navitem:bg-accent"
             }`}
           >
             <item.icon className="h-4 w-4" />
           </div>
           <span
             className={`text-sm group-data-[collapsible=icon]:hidden transition-all duration-200 ${
-              isActive ? "font-semibold tracking-wide text-[#D4AF37]" : "font-medium"
+              isActive ? "font-semibold tracking-wide text-primary" : "font-medium"
             }`}
           >
             {item.label}
           </span>
           {isActive && (
-            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#D4AF37] shadow-[0_0_6px_#D4AF37] group-data-[collapsible=icon]:hidden shrink-0" />
+            <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-primary shadow-sm group-data-[collapsible=icon]:hidden" />
           )}
         </Link>
       </SidebarMenuButton>
@@ -98,8 +100,10 @@ export function AppSidebar() {
   const menuItems: MenuItem[] = [
     { label: "Dashboard",       path: "/",              icon: LayoutDashboard, visible: true },
     { label: "Prospectos",      path: "/prospectos",    icon: UserPlus,        visible: true },
+    { label: "Burn",            path: "/burn",          icon: ArchiveX,        visible: true },
     { label: "Negociaciones",   path: "/negociaciones", icon: Kanban,          visible: true },
     { label: "Contactos",       path: "/contactos",     icon: Users,           visible: true },
+    { label: "Equipo",          path: "/equipo",        icon: ContactRound,    visible: true },
     { label: "Revisión Total",  path: "/cumplimiento",  icon: ShieldCheck,     visible: isSuperAdmin || isCompliance },
     { label: "Contact Center",  path: "/contact-center",icon: PhoneCall,       visible: true },
     { label: "Chat Interno",    path: "/chat",          icon: MessageSquare,   visible: true },
@@ -116,10 +120,10 @@ export function AppSidebar() {
     <Sidebar
       variant="floating"
       collapsible="icon"
-      className="border-r-0 bg-transparent text-[#F8FAFC]"
+      className="border-r-0 bg-transparent text-sidebar-foreground"
       style={{
-        background: "linear-gradient(180deg, #080E20 0%, #0A1228 100%)",
-        borderRight: "1px solid rgba(212,175,55,0.1)",
+        background: "var(--sidebar)",
+        borderRight: "1px solid var(--sidebar-border)",
       }}
     >
       {/* Brand Header */}
@@ -142,12 +146,12 @@ export function AppSidebar() {
 
                 {/* Brand text */}
                 <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-                  <span className="font-title text-sm font-bold tracking-[0.12em] text-[#D4AF37]">
+                  <span className="font-title text-sm font-bold tracking-[0.12em] text-primary">
                     DELTA CAPITAL
                   </span>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="live-dot" />
-                    <span className="text-[9px] tracking-[0.18em] text-[#4A6080] font-medium uppercase">
+                    <span className="text-[9px] tracking-[0.18em] text-muted-foreground font-medium uppercase">
                       Sistema Activo
                     </span>
                   </div>
@@ -188,10 +192,10 @@ export function AppSidebar() {
                 {initials}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold text-[#E2E8F0] truncate">
+                <div className="truncate text-xs font-semibold text-foreground">
                   {profile.first_name} {profile.last_name}
                 </div>
-                <div className="text-[10px] text-[#D4AF37] font-semibold mt-0.5 tracking-wider uppercase">
+                <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
                   {profile.role}
                 </div>
               </div>
@@ -200,7 +204,7 @@ export function AppSidebar() {
 
           <button
             onClick={logout}
-            className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[#6B7FA3] hover:text-red-400 hover:bg-[rgba(239,68,68,0.07)] rounded-lg transition-all duration-200 w-full text-left"
+            className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive"
           >
             <LogOut className="h-4 w-4 shrink-0" />
             <span className="group-data-[collapsible=icon]:hidden">Cerrar sesión</span>

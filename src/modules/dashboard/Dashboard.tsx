@@ -20,8 +20,8 @@ interface PipelinePoint { stage: string; count: number; }
 
 export const Dashboard = () => {
   const { profile } = useAuth();
-  const { isAgent, isSuperAdmin, isManager } = usePermissions();
-  const canSeeActivityLog = isSuperAdmin || isManager;
+  const { isAgent, isSupervisor, isSuperAdmin, isManager } = usePermissions();
+  const canSeeActivityLog = isSuperAdmin || isManager || isSupervisor;
 
   const [stats, setStats] = useState({
     totalLeads: 0,
@@ -41,8 +41,8 @@ export const Dashboard = () => {
     try {
       setLoading(true);
 
-      let leadsQuery = supabase.from("leads").select("id, status", { count: "exact" });
-      let dealsQuery = supabase.from("deals").select("id, value, stage, created_at");
+      let leadsQuery = supabase.from("leads").select("id, status", { count: "exact" }).eq("is_burned", false);
+      let dealsQuery = supabase.from("deals").select("id, value, stage, created_at, lead_id");
       const activitiesQuery = supabase
         .from("activities")
         .select("*")
@@ -52,7 +52,7 @@ export const Dashboard = () => {
       if (isAgent && profile?.id) {
         leadsQuery = leadsQuery.eq("agent_id", profile.id);
         dealsQuery = dealsQuery.eq("agent_id", profile.id);
-      } else if (profile?.team_id && !isAgent) {
+      } else if (isSupervisor && profile?.team_id) {
         leadsQuery = leadsQuery.eq("team_id", profile.team_id);
         dealsQuery = dealsQuery.eq("team_id", profile.team_id);
       }
@@ -60,7 +60,8 @@ export const Dashboard = () => {
       const [leadsRes, dealsRes, activitiesRes] = await Promise.all([leadsQuery, dealsQuery, activitiesQuery]);
 
       const leadsCount = leadsRes.count ?? 0;
-      const dealsData = dealsRes.data ?? [];
+      const activeLeadIds = new Set((leadsRes.data ?? []).map((lead) => lead.id));
+      const dealsData = (dealsRes.data ?? []).filter((deal) => !deal.lead_id || activeLeadIds.has(deal.lead_id));
 
       const activeDeals = dealsData.filter((d) => !["Ganado", "Perdido"].includes(d.stage)).length;
       const wonDeals = dealsData.filter((d) => d.stage === "Ganado");
@@ -111,11 +112,11 @@ export const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [profile, isAgent]);
+  }, [profile, isAgent, isSupervisor]);
 
   useEffect(() => {
     if (profile) fetchDashboardData();
-  }, [fetchDashboardData]);
+  }, [fetchDashboardData, profile]);
 
   // NUEVO: realtime subscription para cuando un deal cambia a "Ganado"
   useEffect(() => {
@@ -140,7 +141,7 @@ export const Dashboard = () => {
   }
 
   return (
-    <div className="space-y-6 p-6 min-h-screen text-[#F8FAFC]">
+    <div className="app-page">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-[rgba(212,175,55,0.1)]">
         <div>

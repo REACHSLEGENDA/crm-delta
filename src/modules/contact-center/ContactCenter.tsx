@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -32,7 +32,7 @@ export const ContactCenter = () => {
       return;
     }
     try {
-      let q = supabase.from("leads").select("id, first_name, last_name, phone, in_call_queue");
+      let q = supabase.from("leads").select("id, first_name, last_name, phone, in_call_queue").eq("is_burned", false);
       if (isAgent) {
         q = q.eq("agent_id", profile?.id);
       }
@@ -57,13 +57,14 @@ export const ContactCenter = () => {
   };
 
   // ✅ CORREGIDO: la cola ahora se filtra por agent_id para agentes
-  const fetchQueue = async () => {
+  const fetchQueue = useCallback(async () => {
     try {
       setLoading(true);
       let query = supabase
         .from("leads")
         .select("id, first_name, last_name, phone, email, status, agent_id")
         .eq("in_call_queue", true)
+        .eq("is_burned", false)
         .order("updated_at", { ascending: false });
 
       // ✅ CLAVE: Agentes solo ven SU base, no la de todos
@@ -78,7 +79,7 @@ export const ContactCenter = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAgent, profile?.id]);
 
   // ✅ Modal state
   const [confirmModal, setConfirmModal] = useState<{isOpen: boolean; targetId: string; targetName: string}>({
@@ -125,7 +126,7 @@ export const ContactCenter = () => {
     }
   };
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     try {
       if (profile?.id) {
         let query = supabase
@@ -144,14 +145,14 @@ export const ContactCenter = () => {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [isAgent, profile?.id]);
 
   useEffect(() => {
     if (profile) {
       fetchQueue();
       fetchHistory();
     }
-  }, [profile, isAgent]);
+  }, [fetchHistory, fetchQueue, profile]);
 
   useEffect(() => {
     if (callStatus === "active") {
@@ -197,14 +198,15 @@ export const ContactCenter = () => {
           type: "call",
         });
 
-        if (disposition === "Depósito confirmado") {
-          await supabase.from("leads").update({ status: "Depósito pendiente" }).eq("id", activeCall.id);
-        } else if (disposition === "Interesado") {
-          await supabase.from("leads").update({ status: "Interesado" }).eq("id", activeCall.id);
-        }
-
-        // ✅ Quitamos automáticamente de la cola
-        await supabase.from("leads").update({ in_call_queue: false }).eq("id", activeCall.id);
+        const leadUpdate: Record<string, unknown> = {
+          in_call_queue: false,
+          contact_outcome:
+            disposition === "Número inexistente" ? "invalid_number" :
+            disposition === "Buzón" ? "direct_voicemail" : "valid",
+        };
+        if (disposition === "Depósito confirmado") leadUpdate.status = "Depósito pendiente";
+        else if (disposition === "Interesado") leadUpdate.status = "Interesado";
+        await supabase.from("leads").update(leadUpdate).eq("id", activeCall.id);
 
         fetchQueue();
         fetchHistory();
@@ -379,7 +381,8 @@ export const ContactCenter = () => {
                       >
                         <option value="Interesado">Interesado</option>
                         <option value="No interesado">No interesado</option>
-                        <option value="Buzón">Buzón</option>
+                        <option value="Buzón">Buzón directo</option>
+                        <option value="Número inexistente">Número inexistente</option>
                         <option value="Callback">Callback</option>
                         <option value="Depósito confirmado">Depósito confirmado</option>
                       </select>

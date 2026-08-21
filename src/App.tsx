@@ -1,25 +1,44 @@
+import { lazy, Suspense, type ComponentType } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { AuthProvider } from "@/auth/useAuth";
 import { ProtectedRoute } from "@/auth/ProtectedRoute";
 import { RoleGuard } from "@/auth/RoleGuard";
 import { DashboardLayout } from "@/auth/DashboardLayout";
-import { LoginPage } from "@/components/atomic-crm/login/LoginPage";
-import { Dashboard } from "@/modules/dashboard/Dashboard";
-import { ProspectosList } from "@/modules/prospectos/ProspectosList";
-import { NegociacionesKanban } from "@/modules/negociaciones/NegociacionesKanban";
-import { ContactosList } from "@/modules/contactos/ContactosList";
-import { ContactCenter } from "@/modules/contact-center/ContactCenter";
-import { ChatInterno } from "@/modules/chat/ChatInterno";
-import { AdminPanel } from "@/modules/admin/AdminPanel";
-import { RegisterInternal } from "@/modules/admin/RegisterInternal";
-import { ImportExportPage } from "@/modules/import-export/ImportExportPage";
-import { CumplimientoDashboard } from "@/modules/cumplimiento/CumplimientoDashboard";
 import { CumplimientoGuard } from "@/auth/CumplimientoGuard";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
+
+const namedLazy = <T extends Record<string, unknown>, K extends keyof T>(loader: () => Promise<T>, name: K) =>
+  lazy(async () => ({ default: (await loader())[name] as ComponentType }));
+
+const LoginPage = namedLazy(() => import("@/components/atomic-crm/login/LoginPage"), "LoginPage");
+const Dashboard = namedLazy(() => import("@/modules/dashboard/Dashboard"), "Dashboard");
+const ProspectosList = namedLazy(() => import("@/modules/prospectos/ProspectosList"), "ProspectosList");
+const BurnList = namedLazy(() => import("@/modules/prospectos/BurnList"), "BurnList");
+const NegociacionesKanban = namedLazy(() => import("@/modules/negociaciones/NegociacionesKanban"), "NegociacionesKanban");
+const ContactosList = namedLazy(() => import("@/modules/contactos/ContactosList"), "ContactosList");
+const EquipoDirectory = namedLazy(() => import("@/modules/equipo/EquipoDirectory"), "EquipoDirectory");
+const ContactCenter = namedLazy(() => import("@/modules/contact-center/ContactCenter"), "ContactCenter");
+const ChatInterno = namedLazy(() => import("@/modules/chat/ChatInterno"), "ChatInterno");
+const AdminPanel = namedLazy(() => import("@/modules/admin/AdminPanel"), "AdminPanel");
+const RegisterInternal = namedLazy(() => import("@/modules/admin/RegisterInternal"), "RegisterInternal");
+const ImportExportPage = namedLazy(() => import("@/modules/import-export/ImportExportPage"), "ImportExportPage");
+const CumplimientoDashboard = namedLazy(() => import("@/modules/cumplimiento/CumplimientoDashboard"), "CumplimientoDashboard");
+
+const PageFallback = () => (
+  <div className="grid min-h-[55vh] place-items-center">
+    <div className="text-center">
+      <span className="mx-auto mb-3 block h-9 w-9 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <p className="text-sm text-muted-foreground">Cargando módulo…</p>
+    </div>
+  </div>
+);
 
 const App = () => {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+        <Suspense fallback={<PageFallback />}>
         <Routes>
           {/* Public Login Route */}
           <Route path="/login" element={<LoginPage />} />
@@ -56,11 +75,31 @@ const App = () => {
             }
           />
           <Route
+            path="/burn"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <BurnList />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/contactos"
             element={
               <ProtectedRoute>
                 <DashboardLayout>
                   <ContactosList />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/equipo"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <EquipoDirectory />
                 </DashboardLayout>
               </ProtectedRoute>
             }
@@ -137,8 +176,10 @@ const App = () => {
           {/* Catch-all Redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+        </Suspense>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

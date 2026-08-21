@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -49,24 +50,22 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex app-bg text-[#F8FAFC]">
+    <div className="flex min-h-dvh bg-background text-foreground">
       <div className="relative grid w-full lg:grid-cols-2">
         {/* Left Branding Panel */}
-        <div className="relative hidden h-full flex-col p-12 text-[#F8FAFC] lg:flex justify-between border-r border-[rgba(212,175,55,0.1)]"
-          style={{ background: "linear-gradient(160deg, #080E20 0%, #0A1228 50%, #050814 100%)" }}
-        >
+        <div className="relative hidden h-full flex-col justify-between border-r border-sidebar-border bg-sidebar p-12 text-sidebar-foreground lg:flex">
           {/* Top Logo */}
           <div className="relative z-20 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl overflow-hidden border border-[rgba(212,175,55,0.3)] bg-[rgba(212,175,55,0.06)] shadow-[0_0_16px_rgba(212,175,55,0.15)]">
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-primary/35 bg-primary/10 shadow-lg">
               <img src="/logo.png" alt="Delta Capital" className="h-full w-full object-cover" />
             </div>
             <div>
-              <div className="font-title text-base font-bold tracking-[0.14em] text-[#D4AF37]">
+              <div className="font-title text-base font-bold tracking-[0.14em] text-primary">
                 DELTA CAPITAL
               </div>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="live-dot" />
-                <span className="text-[9px] tracking-[0.18em] text-[#4A6080] font-medium uppercase">
+                <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/70">
                   Sistema Activo
                 </span>
               </div>
@@ -75,80 +74,85 @@ export const LoginPage = () => {
 
           {/* Center Callout */}
           <div className="relative z-20 my-auto max-w-sm space-y-5">
-            <h2 className="font-title text-4xl font-light leading-tight text-[#F8FAFC]">
-              Private Sales &<br />
-              <span className="text-[#D4AF37] font-normal">Trading Operations</span>
+            <h2 className="font-title text-4xl font-light leading-tight text-sidebar-foreground">
+              Operaciones privadas de<br />
+              <span className="font-normal text-primary">ventas e inversión</span>
             </h2>
-            <div className="h-px w-24 bg-gradient-to-r from-[#D4AF37] via-[#00C9FF] to-transparent" />
-            <p className="text-sm text-[#4A6080] leading-relaxed">
-              Institutional-grade CRM platform for high-frequency sales tracking, deal structuring, and financial flow management.
+            <div className="h-px w-24 bg-gradient-to-r from-primary via-info to-transparent" />
+            <p className="text-sm leading-relaxed text-sidebar-foreground/75">
+              Control institucional de prospectos, equipos, negociaciones y flujo financiero en un solo espacio.
             </p>
           </div>
 
           {/* Footer notice */}
-          <div className="relative z-20 text-[10px] text-[#334155]">
-            © {new Date().getFullYear()} Delta Capital & Holding Street. All rights reserved.
+          <div className="relative z-20 text-xs text-sidebar-foreground/60">
+            © {new Date().getFullYear()} Delta Capital & Holding Street. Todos los derechos reservados.
           </div>
         </div>
 
         {/* Right Form Panel */}
-        <div className="flex flex-col justify-center w-full p-8 relative"
-          style={{ background: "linear-gradient(180deg, #050814 0%, #080E20 100%)" }}
-        >
+        <div className="relative flex w-full flex-col justify-center bg-background p-5 sm:p-8">
           <div className="absolute top-0 left-0 w-full">
             <div className="market-gradient-line" />
+          </div>
+          <div className="absolute right-5 top-5 z-20 sm:right-8 sm:top-8">
+            <ThemeSwitcher />
           </div>
 
           <div className="w-full lg:mx-auto lg:w-[380px]">
             {/* Mobile logo */}
-            <div className="flex items-center gap-2.5 mb-8 lg:hidden">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden border border-[rgba(212,175,55,0.3)]">
+            <div className="mb-8 flex items-center gap-2.5 pr-14 lg:hidden">
+              <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-primary/35">
                 <img src="/logo.png" alt="Delta Capital" className="h-full w-full object-cover" />
               </div>
-              <span className="font-title text-sm font-bold tracking-[0.14em] text-[#D4AF37]">DELTA CAPITAL</span>
+              <span className="font-title text-sm font-bold tracking-[0.14em] text-primary">DELTA CAPITAL</span>
             </div>
 
-            <div className="glass-card p-8 space-y-7">
+            <div className="space-y-7 rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-xl sm:p-8">
               <div className="space-y-1.5">
-                <h1 className="text-xl font-title font-semibold tracking-tight text-[#E2E8F0]">
+                <h1 className="font-title text-2xl font-semibold tracking-tight">
                   Acceso Privado
                 </h1>
-                <p className="text-xs text-[#4A6080]">
+                <p className="text-sm text-muted-foreground">
                   Ingresa tus credenciales para acceder al sistema
                 </p>
               </div>
 
               <form className="space-y-5" onSubmit={handleSubmit}>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-[#6B7FA3] tracking-wider uppercase">
+                  <label htmlFor="login-email" className="text-xs font-semibold uppercase tracking-wider text-foreground/75">
                     Correo electrónico
                   </label>
                   <input
+                    id="login-email"
                     type="email"
+                    autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     placeholder="nombre@empresa.com"
-                    className="w-full px-4 py-3 text-sm bg-[rgba(5,8,20,0.7)] border border-[rgba(212,175,55,0.15)] rounded-lg text-[#E2E8F0] placeholder-[#334155] focus:outline-none focus:border-[rgba(212,175,55,0.45)] focus:ring-1 focus:ring-[rgba(212,175,55,0.15)] transition-all"
+                    className="min-h-11 w-full rounded-lg border border-input bg-background px-4 py-3 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30 sm:text-sm"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-[#6B7FA3] tracking-wider uppercase">
+                  <label htmlFor="login-password" className="text-xs font-semibold uppercase tracking-wider text-foreground/75">
                     Contraseña
                   </label>
                   <input
+                    id="login-password"
                     type="password"
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     placeholder="••••••••"
-                    className="w-full px-4 py-3 text-sm bg-[rgba(5,8,20,0.7)] border border-[rgba(212,175,55,0.15)] rounded-lg text-[#E2E8F0] placeholder-[#334155] focus:outline-none focus:border-[rgba(212,175,55,0.45)] focus:ring-1 focus:ring-[rgba(212,175,55,0.15)] transition-all"
+                    className="min-h-11 w-full rounded-lg border border-input bg-background px-4 py-3 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30 sm:text-sm"
                   />
                 </div>
 
                 {error && (
-                  <div className="px-4 py-3 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-xs text-red-400">
+                  <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                     {error}
                   </div>
                 )}
@@ -156,11 +160,11 @@ export const LoginPage = () => {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="gold-button-primary w-full py-5 text-sm font-semibold rounded-lg"
+                  className="gold-button-primary min-h-11 w-full rounded-lg text-sm font-semibold"
                 >
                   {loading ? (
                     <div className="flex items-center gap-2 justify-center">
-                      <div className="h-4 w-4 rounded-full border-2 border-[rgba(5,8,20,0.4)] border-t-[#050814] animate-spin" />
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/35 border-t-primary-foreground" />
                       <span>Verificando...</span>
                     </div>
                   ) : (
@@ -172,7 +176,7 @@ export const LoginPage = () => {
               <div className="text-center">
                 <a
                   href="/forgot-password"
-                  className="text-xs text-[#4A6080] hover:text-[#D4AF37] transition-colors"
+                  className="inline-flex min-h-11 items-center text-sm text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   ¿Olvidaste tu contraseña?
                 </a>

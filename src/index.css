@@ -1,11 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Inter:wght@300..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-title: "Outfit", sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -43,50 +43,105 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-electric: var(--electric);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
 }
 
-:root, .dark {
+:root,
+.light {
+  color-scheme: light;
   --radius: 0.625rem;
-  --background: #080D1C;
-  --background-deep: #050814;
-  --foreground: #F8FAFC;
-  --card: #111A33;
-  --card-foreground: #F8FAFC;
-  --popover: #0D1428;
-  --popover-foreground: #F8FAFC;
-  
-  --primary: #D4AF37;
-  --primary-foreground: #050814;
-  
-  --secondary: #0D1428;
-  --secondary-foreground: #D4AF37;
-  
-  --muted: #0D1428;
-  --muted-foreground: #94A3B8;
-  
-  --accent: #17213D;
-  --accent-foreground: #E6C766;
-  
-  --destructive: #EF4444;
-  --border: rgba(212, 175, 55, 0.18);
-  --input: #111A33;
-  --ring: #D4AF37;
-  
-  --sidebar: #0D1428;
-  --sidebar-foreground: #F8FAFC;
-  --sidebar-primary: #D4AF37;
-  --sidebar-primary-foreground: #050814;
-  --sidebar-accent: #17213D;
-  --sidebar-accent-foreground: #E6C766;
-  --sidebar-border: rgba(212, 175, 55, 0.18);
-  --sidebar-ring: #D4AF37;
+  --background: #f3f5f8;
+  --background-deep: #e8edf3;
+  --foreground: #172033;
+  --card: #ffffff;
+  --card-foreground: #172033;
+  --popover: #ffffff;
+  --popover-foreground: #172033;
+  --primary: #80600c;
+  --primary-foreground: #ffffff;
+  --primary-bright: #d4af37;
+  --secondary: #e8edf3;
+  --secondary-foreground: #24324a;
+  --muted: #e9edf2;
+  --muted-foreground: #526079;
+  --accent: #fff3c4;
+  --accent-foreground: #5c4608;
+  --destructive: #c62828;
+  --border: #cbd3df;
+  --input: #ffffff;
+  --ring: #80600c;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #24324a;
+  --sidebar-primary: #80600c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f5edcf;
+  --sidebar-accent-foreground: #5c4608;
+  --sidebar-border: #d7dde6;
+  --sidebar-ring: #80600c;
+  --success: #15803d;
+  --warning: #b45309;
+  --danger: #c62828;
+  --info: #0369a1;
+  --electric: #0369a1;
+  --electric-dim: rgba(3, 105, 161, 0.08);
+  --stage-new: #64748b;
+  --stage-contacted: #0284c7;
+  --stage-interested: #ca8a04;
+  --stage-advisory: #ea580c;
+  --stage-deposit: #7c3aed;
+  --stage-won: #15803d;
+  --stage-lost: #c62828;
+  --overlay: rgba(15, 23, 42, 0.48);
+  --shadow-color: 15 23 42;
+}
 
-  --success: #22C55E;
-  --warning: #F59E0B;
-  --danger: #EF4444;
-  --info: #38BDF8;
-  --electric: #00C9FF;
+.dark {
+  color-scheme: dark;
+  --background: #080d1c;
+  --background-deep: #050814;
+  --foreground: #f8fafc;
+  --card: #111a33;
+  --card-foreground: #f8fafc;
+  --popover: #0d1428;
+  --popover-foreground: #f8fafc;
+  --primary: #d4af37;
+  --primary-foreground: #050814;
+  --primary-bright: #e6c766;
+  --secondary: #0d1428;
+  --secondary-foreground: #e6c766;
+  --muted: #17213d;
+  --muted-foreground: #94a3b8;
+  --accent: #17213d;
+  --accent-foreground: #e6c766;
+  --destructive: #ef4444;
+  --border: rgba(212, 175, 55, 0.2);
+  --input: #111a33;
+  --ring: #d4af37;
+  --sidebar: #0d1428;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #d4af37;
+  --sidebar-primary-foreground: #050814;
+  --sidebar-accent: #17213d;
+  --sidebar-accent-foreground: #e6c766;
+  --sidebar-border: rgba(212, 175, 55, 0.18);
+  --sidebar-ring: #d4af37;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #38bdf8;
+  --electric: #00c9ff;
   --electric-dim: rgba(0, 201, 255, 0.07);
+  --stage-new: #94a3b8;
+  --stage-contacted: #00c9ff;
+  --stage-interested: #f59e0b;
+  --stage-advisory: #f97316;
+  --stage-deposit: #a78bfa;
+  --stage-won: #22c55e;
+  --stage-lost: #ef4444;
+  --overlay: rgba(5, 8, 20, 0.76);
+  --shadow-color: 0 0 0;
 }
 
 /* Custom premium classes */
@@ -101,14 +156,13 @@
 
 /* --- Glass card: deep glass with layered shadows --- */
 .glass-card {
-  background: rgba(8, 15, 32, 0.72) !important;
-  border: 1px solid rgba(212, 175, 55, 0.11) !important;
+  background: color-mix(in srgb, var(--card) 88%, transparent) !important;
+  border: 1px solid var(--border) !important;
   backdrop-filter: blur(18px) saturate(1.4);
   border-radius: 0.875rem;
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.55),
-    0 1px 0 rgba(212, 175, 55, 0.07) inset,
-    0 -1px 0 rgba(255, 255, 255, 0.018) inset;
+    0 8px 32px rgb(var(--shadow-color) / 0.14),
+    0 1px 0 color-mix(in srgb, var(--primary) 10%, transparent) inset;
   position: relative;
   overflow: hidden;
 }
@@ -169,27 +223,27 @@
 
 /* --- Buttons --- */
 .gold-button-primary {
-  background: linear-gradient(135deg, #D4AF37, #C49B27) !important;
-  color: #050814 !important;
+  background: linear-gradient(135deg, var(--primary-bright), var(--primary)) !important;
+  color: var(--primary-foreground) !important;
   transition: all 0.2s ease-in-out;
-  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.2);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--primary) 26%, transparent);
 }
 .gold-button-primary:hover {
-  background: linear-gradient(135deg, #E6C766, #D4AF37) !important;
-  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.35);
+  filter: brightness(1.06);
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--primary) 34%, transparent);
   transform: translateY(-1px);
 }
 
 .gold-button-secondary {
   background: transparent !important;
-  border: 1px solid rgba(212, 175, 55, 0.35) !important;
-  color: #D4AF37 !important;
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border)) !important;
+  color: var(--primary) !important;
   transition: all 0.2s ease-in-out;
 }
 .gold-button-secondary:hover {
-  border-color: rgba(212, 175, 55, 0.7) !important;
-  background: rgba(212, 175, 55, 0.07) !important;
-  box-shadow: 0 0 12px rgba(212, 175, 55, 0.1);
+  border-color: var(--primary) !important;
+  background: color-mix(in srgb, var(--primary) 9%, transparent) !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--primary) 13%, transparent);
 }
 
 /* --- Animated market line with electric accent --- */
@@ -225,26 +279,76 @@
 
 /* --- Sidebar nav pill active --- */
 .nav-item-active {
-  background: linear-gradient(90deg, rgba(212,175,55,0.16) 0%, rgba(212,175,55,0.04) 100%) !important;
-  color: #D4AF37 !important;
-  box-shadow: inset 0 0 0 1px rgba(212,175,55,0.18);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 16%, transparent) 0%, color-mix(in srgb, var(--primary) 4%, transparent) 100%) !important;
+  color: var(--primary) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 22%, transparent);
 }
 
 /* --- Glass header bar --- */
 .header-glass {
-  background: rgba(5, 8, 20, 0.82);
+  background: color-mix(in srgb, var(--background) 88%, transparent);
   backdrop-filter: blur(20px) saturate(1.5);
-  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
-  box-shadow: 0 1px 24px rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 24px rgb(var(--shadow-color) / 0.1);
 }
 
 /* --- Subtle financial grid on body bg --- */
 .app-bg {
-  background-color: #050814;
+  background-color: var(--background-deep);
   background-image:
-    linear-gradient(rgba(212, 175, 55, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(212, 175, 55, 0.018) 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, var(--primary) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--primary) 4%, transparent) 1px, transparent 1px);
   background-size: 40px 40px;
+}
+
+.app-surface {
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  box-shadow: 0 8px 30px rgb(var(--shadow-color) / 0.08);
+}
+
+.app-panel {
+  background: color-mix(in srgb, var(--card) 95%, var(--background));
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.app-icon-button {
+  display: inline-flex;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.625rem;
+  color: var(--muted-foreground);
+  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.app-icon-button:hover {
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  color: var(--primary);
+}
+
+.app-icon-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.app-page {
+  width: 100%;
+  min-width: 0;
+  padding: clamp(1rem, 2vw, 1.5rem);
+}
+
+.app-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 /* --- Icon glow wrappers --- */
@@ -325,12 +429,12 @@ input[type="time"] {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(212, 175, 55, 0.2);
+  background: color-mix(in srgb, var(--primary) 28%, transparent);
   border-radius: 99px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(212, 175, 55, 0.45);
+  background: color-mix(in srgb, var(--primary) 52%, transparent);
 }
 
 ::-webkit-scrollbar-corner {
@@ -340,7 +444,7 @@ input[type="time"] {
 /* Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(212, 175, 55, 0.2) transparent;
+  scrollbar-color: color-mix(in srgb, var(--primary) 28%, transparent) transparent;
 }
 
 @layer base {
@@ -353,5 +457,58 @@ input[type="time"] {
 }
 
 body {
-  font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  min-width: 320px;
+  overflow-x: hidden;
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Compatibility bridge while legacy screens move to semantic tokens. */
+.light .bg-\[\#050814\],
+.light .bg-\[\#080D1C\] {
+  background-color: var(--background) !important;
+}
+
+.light .bg-\[\#0D1428\],
+.light .bg-\[\#111A33\] {
+  background-color: var(--card) !important;
+}
+
+.light .text-\[\#F8FAFC\],
+.light .text-\[\#E2E8F0\],
+.light .text-\[\#CBD5E1\] {
+  color: var(--foreground) !important;
+}
+
+.light .text-\[\#94A3B8\],
+.light .text-\[\#6B7FA3\],
+.light .text-\[\#4A6080\],
+.light .text-\[\#64748B\] {
+  color: var(--muted-foreground) !important;
+}
+
+.light .text-\[\#D4AF37\] {
+  color: var(--primary) !important;
+}
+
+.light .border-\[rgba\(212\2c 175\2c 55\2c 0\.1\)\],
+.light .border-\[rgba\(212\2c 175\2c 55\2c 0\.12\)\],
+.light .border-\[rgba\(212\2c 175\2c 55\2c 0\.15\)\],
+.light .border-\[rgba\(212\2c 175\2c 55\2c 0\.18\)\],
+.light .border-\[rgba\(212\2c 175\2c 55\2c 0\.2\)\] {
+  border-color: var(--border) !important;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 32%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

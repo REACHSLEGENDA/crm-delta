@@ -1,18 +1,37 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/admin/app-sidebar";
 import { useAuth } from "@/auth/useAuth";
 import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/types";
 import { UserCheck, RefreshCw, Eye } from "lucide-react";
+import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+
+const PAGE_LABELS: Record<string, { title: string; area: string }> = {
+  "/": { title: "Dashboard", area: "Resumen operativo" },
+  "/prospectos": { title: "Prospectos", area: "Gestión comercial" },
+  "/burn": { title: "Burn", area: "Depuración y auditoría" },
+  "/negociaciones": { title: "Negociaciones", area: "Pipeline de inversión" },
+  "/contactos": { title: "Contactos", area: "Directorio comercial" },
+  "/equipo": { title: "Equipo", area: "Directorio interno" },
+  "/cumplimiento": { title: "Revisión Total", area: "Cumplimiento" },
+  "/contact-center": { title: "Contact Center", area: "Operación telefónica" },
+  "/chat": { title: "Chat interno", area: "Colaboración" },
+  "/import-export": { title: "Importar / Exportar", area: "Administración de datos" },
+  "/admin": { title: "Administración", area: "Configuración y acceso" },
+};
 
 export const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const { originalProfile, profile, impersonate } = useAuth();
+  const location = useLocation();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedId, setSelectedId] = useState("");
 
   const canAudit = originalProfile?.role === "SUPERADMIN" || originalProfile?.role === "MANAGER" || originalProfile?.role === "SUPERVISOR";
   const isImpersonating = Boolean(originalProfile && profile && originalProfile.id !== profile.id);
+  const pageLabel = PAGE_LABELS[location.pathname] ?? { title: "Delta Capital", area: "CRM" };
 
   useEffect(() => {
     if (canAudit) {
@@ -22,15 +41,31 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
         .neq("id", originalProfile?.id || "")
         .eq("active", true);
         
-      if (originalProfile?.role !== "SUPERADMIN") {
-        query = query.eq("department", originalProfile?.department || "");
+      if (originalProfile?.role === "MANAGER") {
+        query = query
+          .eq("department", originalProfile.department)
+          .in("role", ["SUPERVISOR", "AGENT"]);
+      } else if (originalProfile?.role === "SUPERVISOR") {
+        if (!originalProfile.team_id) {
+          setProfiles([]);
+          return;
+        }
+        query = query
+          .eq("team_id", originalProfile.team_id)
+          .eq("role", "AGENT");
       }
 
       query.then(({ data }) => {
         if (data) setProfiles(data as Profile[]);
       });
     }
-  }, [canAudit, originalProfile?.id, originalProfile?.role, originalProfile?.department]);
+  }, [
+    canAudit,
+    originalProfile?.id,
+    originalProfile?.role,
+    originalProfile?.department,
+    originalProfile?.team_id,
+  ]);
 
   const handleImpersonateChange = (userId: string) => {
     if (!userId) {
@@ -47,7 +82,13 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-screen app-bg">
+      <a
+        href="#main-content"
+        className="fixed left-3 top-3 z-[100] -translate-y-24 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg transition-transform focus:translate-y-0"
+      >
+        Saltar al contenido
+      </a>
+      <div className="flex min-h-screen w-full app-bg">
         <AppSidebar />
 
         <div className="flex-1 flex flex-col min-w-0">
@@ -56,7 +97,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
 
           {/* Audit mode banner */}
           {isImpersonating && (
-            <div className="bg-gradient-to-r from-[#D4AF37] to-[#C49B27] text-[#050814] px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-lg">
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-lg">
               <div className="flex items-center gap-2">
                 <UserCheck className="h-4 w-4" />
                 <span>
@@ -72,7 +113,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                   impersonate(null);
                   setSelectedId("");
                 }}
-                className="bg-[#050814] text-[#D4AF37] px-3 py-1 rounded-lg font-bold hover:bg-[#111A33] transition-colors flex items-center gap-1.5 text-xs"
+                className="flex min-h-9 items-center gap-1.5 rounded-lg bg-background px-3 py-1 text-xs font-bold text-primary transition-colors hover:bg-card"
               >
                 <RefreshCw className="h-3 w-3" /> Revertir Vista
               </button>
@@ -80,22 +121,25 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           )}
 
           {/* Sticky glassmorphic header */}
-          <header className="sticky top-0 z-40 header-glass flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-3">
-              <SidebarTrigger className="text-[#94A3B8] hover:text-[#D4AF37] hover:bg-[rgba(212,175,55,0.08)] rounded-lg transition-all duration-200 h-8 w-8" />
-              <div className="h-4 w-px bg-[rgba(212,175,55,0.2)] hidden md:block" />
-              <span className="font-title text-xs font-bold text-[#4A6080] tracking-[0.2em] uppercase hidden md:inline-block">
-                DELTA CAPITAL
-              </span>
+          <header className="sticky top-0 z-40 header-glass flex min-h-16 items-center justify-between gap-3 px-3 py-2 sm:px-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <SidebarTrigger className="app-icon-button h-11 w-11" />
+              <div className="hidden h-7 w-px bg-border sm:block" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-foreground">{pageLabel.title}</p>
+                <p className="hidden truncate text-[11px] text-muted-foreground sm:block">{pageLabel.area}</p>
+              </div>
             </div>
 
-            {canAudit && (
-              <div className="flex items-center gap-2">
-                <Eye className="h-3.5 w-3.5 text-[#D4AF37] hidden sm:inline opacity-70" />
+            <div className="flex items-center gap-1 sm:gap-2">
+              {canAudit && (
+              <div className="hidden items-center gap-2 lg:flex">
+                <Eye className="h-3.5 w-3.5 text-primary opacity-70" aria-hidden="true" />
                 <select
                   value={selectedId}
                   onChange={(e) => handleImpersonateChange(e.target.value)}
-                  className="px-3 py-1.5 w-52 text-xs bg-[rgba(17,26,51,0.8)] border border-[rgba(212,175,55,0.2)] rounded-lg text-[#D4AF37] font-medium focus:outline-none focus:border-[rgba(212,175,55,0.5)] focus:ring-1 focus:ring-[rgba(212,175,55,0.2)] transition-all backdrop-blur"
+                  aria-label="Auditar perspectiva de usuario"
+                  className="h-10 w-56 rounded-lg border border-border bg-card px-3 text-xs font-medium text-primary outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">Auditar perspectiva...</option>
                   {profiles.map((p) => (
@@ -105,18 +149,21 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
                   ))}
                 </select>
               </div>
-            )}
+              )}
+              <NotificationCenter />
+              <ThemeSwitcher />
+            </div>
           </header>
 
           {/* Main content */}
-          <div className="flex-1 overflow-auto">
+          <main id="main-content" className="flex-1 overflow-auto" tabIndex={-1}>
             <div
               className={isImpersonating ? "pointer-events-none opacity-[0.96]" : undefined}
               aria-disabled={isImpersonating || undefined}
             >
               {children}
             </div>
-          </div>
+          </main>
         </div>
       </div>
     </SidebarProvider>
