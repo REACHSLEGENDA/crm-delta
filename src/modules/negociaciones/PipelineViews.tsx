@@ -15,12 +15,70 @@ import {
 import { Button } from "@/components/ui/button";
 import type { Activity, Deal, Lead } from "@/types";
 import {
+  CONTACT_OUTCOME_CONFIG,
   PIPELINE_STAGES,
   STAGE_CONFIG,
   formatCurrency,
   isPipelineStage,
   type PipelineStage,
 } from "./pipeline";
+
+type OutcomeValue = NonNullable<Lead["contact_outcome"]>;
+type OutcomeChangeHandler = (lead: Lead, outcome: OutcomeValue) => void;
+
+/** Cards rendered per column — the board stays responsive with large pipelines. */
+const CARDS_PER_STAGE = 50;
+
+
+/**
+ * Typification chip. Read-only when no handler is supplied; otherwise an inline
+ * select that writes straight to the prospect, so the pipeline and the
+ * Prospectos screen always share one record.
+ */
+const OutcomeBadge = ({ lead, onOutcomeChange }: { lead?: Lead; onOutcomeChange?: OutcomeChangeHandler }) => {
+  const outcome: OutcomeValue = lead?.contact_outcome ?? "pending";
+  const config = CONTACT_OUTCOME_CONFIG[outcome] ?? CONTACT_OUTCOME_CONFIG.pending;
+
+  if (!lead || !onOutcomeChange) {
+    if (outcome === "pending") return null;
+    return (
+      <span
+        className="inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+        style={{
+          color: config.color,
+          background: `color-mix(in srgb, ${config.color} 12%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${config.color} 25%, transparent)`,
+        }}
+        title={`Tipificación: ${config.label}`}
+      >
+        {config.label}
+      </span>
+    );
+  }
+
+  return (
+    <select
+      value={outcome}
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onChange={(event) => { event.stopPropagation(); onOutcomeChange(lead, event.target.value as OutcomeValue); }}
+      className="max-w-full cursor-pointer truncate rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+      style={{
+        color: config.color,
+        background: `color-mix(in srgb, ${config.color} 12%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${config.color} 25%, transparent)`,
+      }}
+      aria-label={`Tipificación de ${lead.first_name} ${lead.last_name}`}
+      title="Tipificación del prospecto"
+    >
+      {(Object.keys(CONTACT_OUTCOME_CONFIG) as OutcomeValue[]).map((value) => (
+        <option key={value} value={value} className="bg-popover font-semibold text-foreground">
+          {CONTACT_OUTCOME_CONFIG[value].label}
+        </option>
+      ))}
+    </select>
+  );
+};
 
 interface SharedDealProps {
   deals: Deal[];
@@ -29,6 +87,7 @@ interface SharedDealProps {
   onEditDeal: (deal: Deal) => void;
   onDeleteDeal: (deal: Deal) => void;
   canDelete?: boolean;
+  onOutcomeChange?: OutcomeChangeHandler;
 }
 
 interface KanbanViewProps extends SharedDealProps {
@@ -58,6 +117,7 @@ export const KanbanView = ({
   onDeleteDeal,
   onCreateFromLead,
   canDelete,
+  onOutcomeChange,
 }: KanbanViewProps) => (
   <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
     {PIPELINE_STAGES.map((stage) => {
@@ -92,7 +152,7 @@ export const KanbanView = ({
           </header>
 
           <div className="flex-1 space-y-2.5 p-2.5">
-            {stageDeals.slice(0, 100).map((deal) => {
+            {stageDeals.slice(0, CARDS_PER_STAGE).map((deal) => {
               const lead = getLead(deal, leads);
               return (
                 <article
@@ -110,6 +170,9 @@ export const KanbanView = ({
                       <p className="font-display mt-1 text-[15px] font-bold tabular-nums" style={{ color: config.color }}>
                         {formatCurrency(deal.value, deal.currency)}
                       </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        <OutcomeBadge lead={lead} onOutcomeChange={onOutcomeChange} />
+                      </div>
                     </div>
                   </div>
                   <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border pt-2">
@@ -148,9 +211,9 @@ export const KanbanView = ({
               );
             })}
 
-            {stageDeals.length > 100 && (
+            {stageDeals.length > CARDS_PER_STAGE && (
               <p className="rounded-lg bg-muted px-3 py-2 text-center text-xs text-muted-foreground">
-                Mostrando 100 de {stageDeals.length}. Usa la vista Lista para consultar todos.
+                Mostrando {CARDS_PER_STAGE} de {stageDeals.length}. Usa la vista Lista para consultar todos.
               </p>
             )}
 
@@ -178,7 +241,12 @@ export const KanbanView = ({
   </div>
 );
 
-export const DealsListView = ({ deals, leads, onOpenDeal, onEditDeal, onDeleteDeal, canDelete }: SharedDealProps) => (
+interface DealsListViewProps extends SharedDealProps {
+  onStageChange?: (deal: Deal, stage: PipelineStage) => void;
+  canMutate?: boolean;
+}
+
+export const DealsListView = ({ deals, leads, onOpenDeal, onEditDeal, onDeleteDeal, canDelete, onStageChange, canMutate, onOutcomeChange }: DealsListViewProps) => (
   <div className="app-surface overflow-hidden">
     <div className="hidden overflow-x-auto md:block">
       <table className="w-full min-w-[760px] border-collapse text-left">
@@ -205,11 +273,34 @@ export const DealsListView = ({ deals, leads, onOpenDeal, onEditDeal, onDeleteDe
                   </button>
                 </td>
                 <td className="px-4 py-3">
-                  <span className="inline-flex items-center gap-2 text-xs font-semibold" style={{ color: config.color }}>
-                    <Circle className="h-2.5 w-2.5 fill-current" /> {config.shortLabel}
+                  {canMutate && onStageChange ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Circle className="h-2.5 w-2.5 shrink-0 fill-current" style={{ color: config.color }} />
+                      <select
+                        value={stage}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => onStageChange(deal, event.target.value as PipelineStage)}
+                        className="cursor-pointer rounded-md border border-transparent bg-transparent py-1 pl-1 pr-5 text-xs font-semibold outline-none transition-colors hover:border-border focus-visible:ring-2 focus-visible:ring-ring"
+                        style={{ color: config.color }}
+                        aria-label={`Cambiar etapa de ${deal.name}`}
+                      >
+                        {PIPELINE_STAGES.map((option) => (
+                          <option key={option} value={option} className="bg-popover text-foreground">{STAGE_CONFIG[option].shortLabel}</option>
+                        ))}
+                      </select>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-2 text-xs font-semibold" style={{ color: config.color }}>
+                      <Circle className="h-2.5 w-2.5 fill-current" /> {config.shortLabel}
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-sm text-muted-foreground">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="truncate">{lead ? `${lead.first_name} ${lead.last_name}` : "Sin asociar"}</span>
+                    <OutcomeBadge lead={lead} onOutcomeChange={onOutcomeChange} />
                   </span>
                 </td>
-                <td className="px-4 py-3 text-sm text-muted-foreground">{lead ? `${lead.first_name} ${lead.last_name}` : "Sin asociar"}</td>
                 <td className="px-4 py-3 text-right font-semibold tabular-nums">{formatCurrency(deal.value, deal.currency)}</td>
                 <td className="px-4 py-3 text-sm text-muted-foreground">{new Date(deal.updated_at).toLocaleDateString("es-MX")}</td>
                 <td className="px-4 py-3">
@@ -240,8 +331,11 @@ export const DealsListView = ({ deals, leads, onOpenDeal, onEditDeal, onDeleteDe
               </span>
               <span className="shrink-0 text-sm font-bold tabular-nums">{formatCurrency(deal.value, deal.currency)}</span>
             </span>
-            <span className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: config.color }}>
-              <Circle className="h-2.5 w-2.5 fill-current" /> {config.label}
+            <span className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: config.color }}>
+                <Circle className="h-2.5 w-2.5 fill-current" /> {config.label}
+              </span>
+              <OutcomeBadge lead={lead} />
             </span>
           </button>
         );

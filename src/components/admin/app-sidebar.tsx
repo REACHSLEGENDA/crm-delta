@@ -100,7 +100,7 @@ export function AppSidebar() {
   const menuItems: MenuItem[] = [
     { label: "Dashboard",       path: "/",              icon: LayoutDashboard, visible: true },
     { label: "Prospectos",      path: "/prospectos",    icon: UserPlus,        visible: true },
-    { label: "Burn",            path: "/burn",          icon: ArchiveX,        visible: true },
+    { label: "Burn",            path: "/burn",          icon: ArchiveX,        visible: isSuperAdmin },
     { label: "Negociaciones",   path: "/negociaciones", icon: Kanban,          visible: true },
     { label: "Contactos",       path: "/contactos",     icon: Users,           visible: true },
     { label: "Equipo",          path: "/equipo",        icon: ContactRound,    visible: true },

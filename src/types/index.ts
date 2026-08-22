@@ -2,8 +2,8 @@ export type UserRole = 'SUPERADMIN' | 'MANAGER' | 'AGENT' | 'SUPERVISOR';
 export type Department = 'Ventas' | 'Retencion' | 'Cumplimiento';
 export type LeadStatus = 'Nuevo' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido' | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
 export type DealStage = 'Nuevo lead' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido' | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
-export type CallDisposition = 'Interesado' | 'No interesado' | 'Buzón' | 'Número inexistente' | 'Callback' | 'Depósito confirmado';
-export type LeadContactOutcome = 'pending' | 'valid' | 'invalid_number' | 'direct_voicemail';
+export type CallDisposition = 'Interesado' | 'No interesado' | 'Buzón' | 'Número inexistente' | 'Callback' | 'Depósito confirmado' | 'No contestó';
+export type LeadContactOutcome = 'pending' | 'valid' | 'invalid_number' | 'direct_voicemail' | 'no_answer';
 export type ChannelType = 'general' | 'ventas' | 'soporte' | 'alertas' | 'privado';
 export type RuleStatus = 'active' | 'inactive';
 

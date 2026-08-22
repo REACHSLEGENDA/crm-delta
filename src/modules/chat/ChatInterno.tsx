@@ -31,13 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { EmojiPicker } from "./EmojiPicker";
 
-const DEFAULT_CHANNELS: Array<{ name: string; type: ChannelType }> = [
-  { name: "Ventas", type: "ventas" },
-  { name: "Compliance", type: "alertas" },
-  { name: "Retention", type: "general" },
-  { name: "Líderes", type: "alertas" },
-];
-const STICKERS = ["🎉", "🔥", "💯", "👏", "🚀", "🤝", "💰", "📈", "✅", "🙌", "😎", "🥳", "👀", "💪", "⭐", "🏆", "📞", "💬", "🫡", "🤑", "👍", "🙏", "😂", "❤️"];
+const STICKERS =["🎉", "🔥", "💯", "👏", "🚀", "🤝", "💰", "📈", "✅", "🙌", "😎", "🥳", "👀", "💪", "⭐", "🏆", "📞", "💬", "🫡", "🤑", "👍", "🙏", "😂", "❤️"];
 
 const fullName = (profile?: Pick<Profile, "first_name" | "last_name" | "email">) =>
   profile ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || profile.email : "Usuario";
@@ -108,21 +102,13 @@ export const ChatInterno = () => {
     setSelectedChannel((current) => nextChannels.find((item) => item.id === current?.id) ?? nextChannels[0] ?? null);
   }, []);
 
-  const ensureDefaultChannels = useCallback(async () => {
-    if (!canManagePublicChannels || !profile?.id) return;
-    for (const channel of DEFAULT_CHANNELS) {
-      const { data } = await supabase.from("channels").select("id").eq("name", channel.name).maybeSingle();
-      if (!data) await supabase.from("channels").insert({ ...channel, created_by: profile.id });
-    }
-  }, [canManagePublicChannels, profile?.id]);
-
   useEffect(() => {
     if (!profile) return;
     void Promise.all([
-      ensureDefaultChannels().then(fetchChannels),
+      fetchChannels(),
       supabase.from("profiles").select("*").eq("active", true).order("first_name").then(({ data }) => setAllUsers((data ?? []) as Profile[])),
     ]);
-  }, [ensureDefaultChannels, fetchChannels, profile]);
+  }, [fetchChannels, profile]);
 
   const fetchMessages = useCallback(async (channelId: string) => {
     const { data, error: messageError } = await supabase
@@ -155,12 +141,12 @@ export const ChatInterno = () => {
     event.preventDefault();
     if (!profile?.id || !newChannelName.trim()) return;
     const type = canManagePublicChannels ? newChannelType : "privado";
-    if (type === "privado" && newChannelMembers.length === 0) {
-      setError("Selecciona al menos un colaborador para el chat privado.");
+    if (newChannelMembers.length === 0) {
+      setError("Selecciona al menos un colaborador para el chat.");
       return;
     }
     setCreatingChannel(true); setError("");
-    const members = type === "privado" ? Array.from(new Set([profile.id, ...newChannelMembers])) : [];
+    const members = Array.from(new Set([profile.id, ...newChannelMembers]));
     const { error: createError } = await supabase.from("channels").insert({
       name: newChannelName.trim(), type, members, created_by: profile.id,
     });
@@ -245,7 +231,7 @@ export const ChatInterno = () => {
     <section className="app-page gap-3" aria-labelledby="chat-title">
       <header className="app-page-header">
         <div><p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary"><MessageSquare className="h-4 w-4" /> Colaboración interna</p><h1 id="chat-title" className="font-title text-2xl font-bold text-foreground sm:text-3xl">Chat interno</h1><p className="mt-1 text-sm text-muted-foreground">Canales por área, grupos privados y archivos en un solo espacio.</p></div>
-        {!isAuditMode && <button type="button" onClick={() => setCreateOpen(true)} className="gold-button-primary inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-sm font-bold"><Plus className="h-4 w-4" /> Nuevo chat</button>}
+        {canManagePublicChannels && <button type="button" onClick={() => setCreateOpen(true)} className="gold-button-primary inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-sm font-bold"><Plus className="h-4 w-4" /> Nuevo chat</button>}
       </header>
       {error && <div role="alert" className="flex justify-between gap-3 rounded-lg border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive"><span>{error}</span><button type="button" onClick={() => setError("")} className="font-semibold underline">Cerrar</button></div>}
 
@@ -343,7 +329,7 @@ export const ChatInterno = () => {
           <form id="create-channel-form" onSubmit={createChannel} className="grid gap-4">
             <label className="grid gap-1.5 text-sm font-medium">Nombre<input value={newChannelName} onChange={(event) => setNewChannelName(event.target.value)} className="h-11 rounded-lg border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring" /></label>
             {canManagePublicChannels && <label className="grid gap-1.5 text-sm font-medium">Tipo<select value={newChannelType} onChange={(event) => setNewChannelType(event.target.value as ChannelType)} className="h-11 rounded-lg border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="privado">Privado</option><option value="general">General</option><option value="ventas">Ventas</option><option value="soporte">Supervisión</option><option value="alertas">Líderes</option></select></label>}
-            {(!canManagePublicChannels || newChannelType === "privado") && <fieldset className="grid gap-2"><legend className="text-sm font-medium">Participantes</legend><div className="grid max-h-60 gap-1 overflow-y-auto rounded-lg border border-border p-2 sm:grid-cols-2">{allUsers.filter((user) => user.id !== profile?.id).map((user) => <label key={user.id} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 hover:bg-accent"><input type="checkbox" checked={newChannelMembers.includes(user.id)} onChange={(event) => setNewChannelMembers((current) => event.target.checked ? [...current, user.id] : current.filter((id) => id !== user.id))} className="h-4 w-4 accent-primary" /><span className="min-w-0 text-sm"><span className="block truncate font-medium">{fullName(user)}</span><span className="block truncate text-[10px] text-muted-foreground">{user.department}</span></span></label>)}</div></fieldset>}
+            <fieldset className="grid gap-2"><legend className="text-sm font-medium">Participantes</legend><div className="grid max-h-60 gap-1 overflow-y-auto rounded-lg border border-border p-2 sm:grid-cols-2">{allUsers.filter((user) => user.id !== profile?.id).map((user) => <label key={user.id} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 hover:bg-accent"><input type="checkbox" checked={newChannelMembers.includes(user.id)} onChange={(event) => setNewChannelMembers((current) => event.target.checked ? [...current, user.id] : current.filter((id) => id !== user.id))} className="h-4 w-4 accent-primary" /><span className="min-w-0 text-sm"><span className="block truncate font-medium">{fullName(user)}</span><span className="block truncate text-[10px] text-muted-foreground">{user.department}</span></span></label>)}</div></fieldset>
           </form>
           <DialogFooter><button type="button" onClick={() => setCreateOpen(false)} className="min-h-11 rounded-lg border border-border px-4 text-sm font-semibold hover:bg-accent">Cancelar</button><button form="create-channel-form" type="submit" disabled={creatingChannel} className="gold-button-primary min-h-11 rounded-lg px-4 text-sm font-bold disabled:opacity-50">{creatingChannel ? "Creando…" : "Crear chat"}</button></DialogFooter>
         </DialogContent>

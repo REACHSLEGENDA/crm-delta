@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { openAttachment } from "@/lib/attachments";
 import type { Activity, Deal, FileAttachment, Lead, Note, Profile } from "@/types";
-import { PIPELINE_STAGES, STAGE_CONFIG, formatCurrency, isPipelineStage, type PipelineStage } from "./pipeline";
+import { CONTACT_OUTCOME_CONFIG, PIPELINE_STAGES, STAGE_CONFIG, formatCurrency, isPipelineStage, type PipelineStage } from "./pipeline";
 
 export interface ActivityDraft {
   title: string;
@@ -47,6 +47,8 @@ interface DealWorkspaceSheetProps {
   onDeleteActivity: (activity: Activity) => void;
   canManageActivity?: (activity: Activity) => boolean;
   onCreateNote: (content: string, files: File[]) => Promise<void>;
+  /** Writes the typification straight to the prospect (single source of truth). */
+  onOutcomeChange?: (lead: Lead, outcome: NonNullable<Lead["contact_outcome"]>) => void;
 }
 
 const toLocalDateTimeValue = (date: Date) => {
@@ -78,6 +80,7 @@ export const DealWorkspaceSheet = ({
   onDeleteActivity,
   canManageActivity = () => true,
   onCreateNote,
+  onOutcomeChange,
 }: DealWorkspaceSheetProps) => {
   const [activityDraft, setActivityDraft] = useState<ActivityDraft>({
     title: "Comunicarse con el cliente",
@@ -206,6 +209,34 @@ export const DealWorkspaceSheet = ({
                   </div>
                   {lead.email && <a href={`mailto:${lead.email}`} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"><Mail className="h-4 w-4" /> <span className="truncate">{lead.email}</span></a>}
                   {lead.phone && <a href={`tel:${lead.phone}`} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"><Phone className="h-4 w-4" /> {lead.phone}</a>}
+
+                  {onOutcomeChange && (
+                    <div className="border-t border-border pt-3">
+                      <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Tipificación</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(Object.keys(CONTACT_OUTCOME_CONFIG) as Array<NonNullable<Lead["contact_outcome"]>>).map((value) => {
+                          const config = CONTACT_OUTCOME_CONFIG[value];
+                          const isActive = (lead.contact_outcome ?? "pending") === value;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => onOutcomeChange(lead, value)}
+                              className="min-h-9 rounded-lg px-2.5 text-[11px] font-bold transition-colors"
+                              style={{
+                                color: isActive ? config.color : "var(--muted-foreground)",
+                                background: isActive ? `color-mix(in srgb, ${config.color} 14%, transparent)` : "transparent",
+                                border: `1px solid ${isActive ? `color-mix(in srgb, ${config.color} 35%, transparent)` : "var(--border)"}`,
+                              }}
+                              aria-pressed={isActive}
+                            >
+                              {config.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No hay un prospecto asociado.</p>

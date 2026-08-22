@@ -78,9 +78,11 @@ const App = () => {
             path="/burn"
             element={
               <ProtectedRoute>
-                <DashboardLayout>
-                  <BurnList />
-                </DashboardLayout>
+                <RoleGuard allowedRoles={["SUPERADMIN"]}>
+                  <DashboardLayout>
+                    <BurnList />
+                  </DashboardLayout>
+                </RoleGuard>
               </ProtectedRoute>
             }
           />

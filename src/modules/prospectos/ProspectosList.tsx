@@ -469,6 +469,7 @@ export const ProspectosList = () => {
             <option value="">-- Todos los números --</option>
             <option value="invalid_number">Número inexistente</option>
             <option value="direct_voicemail">Buzón directo</option>
+            <option value="no_answer">No contestó</option>
             <option value="valid">Número válido</option>
             <option value="pending">Sin clasificar</option>
           </select>
@@ -591,6 +592,7 @@ export const ProspectosList = () => {
                 <option value="">Clasificar número…</option>
                 <option value="invalid_number">Número inexistente</option>
                 <option value="direct_voicemail">Buzón directo</option>
+                <option value="no_answer">No contestó</option>
                 <option value="valid">Número válido</option>
               </select>
               <button
@@ -687,7 +689,7 @@ export const ProspectosList = () => {
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                         <span className="rounded-full bg-muted px-2 py-1">{lead.source || "Sin fuente"}</span>
                         <span className="rounded-full bg-muted px-2 py-1">
-                          {lead.contact_outcome === "invalid_number" ? "Número inexistente" : lead.contact_outcome === "direct_voicemail" ? "Buzón directo" : lead.contact_outcome === "valid" ? "Número válido" : "Sin clasificar"}
+                          {lead.contact_outcome === "invalid_number" ? "Número inexistente" : lead.contact_outcome === "direct_voicemail" ? "Buzón directo" : lead.contact_outcome === "no_answer" ? "No contestó" : lead.contact_outcome === "valid" ? "Número válido" : "Sin clasificar"}
                         </span>
                       </div>
                       <div className="mt-3 flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
@@ -1048,6 +1050,7 @@ export const ProspectosList = () => {
                   <option value="valid">Número válido</option>
                   <option value="invalid_number">Número inexistente</option>
                   <option value="direct_voicemail">Buzón directo</option>
+                  <option value="no_answer">No contestó</option>
                 </select>
               </div>
             </div>

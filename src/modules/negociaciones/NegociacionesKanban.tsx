@@ -9,7 +9,7 @@ import { removeAttachment, uploadAttachment } from "@/lib/attachments";
 import { ActivitiesView, CalendarView, DealsListView, KanbanView } from "./PipelineViews";
 import { DealWorkspaceSheet, type ActivityDraft } from "./DealWorkspaceSheet";
 import { CloseDealDialog, DealFormDialog, PostponeDialog, type DealFormPayload } from "./DealDialogs";
-import { ACTIVE_STAGES, PIPELINE_STAGES, formatCurrency, type PipelineStage } from "./pipeline";
+import { ACTIVE_STAGES, CONTACT_OUTCOME_CONFIG, PIPELINE_STAGES, formatCurrency, type PipelineStage } from "./pipeline";
 
 type ViewMode = "kanban" | "list" | "activities" | "calendar";
 interface ConfirmTarget { type: "deal" | "activity"; id: string; name: string; }
@@ -23,6 +23,27 @@ const VIEW_OPTIONS: Array<{ value: ViewMode; label: string; icon: typeof Columns
   { value: "calendar", label: "Calendario", icon: CalendarDays },
 ];
 const safeViewMode = (value: string | null): ViewMode => VIEW_OPTIONS.some((item) => item.value === value) ? value as ViewMode : "kanban";
+
+// PostgREST caps every response at 1000 rows regardless of .limit(), so a single
+// query silently truncates the dataset and leaves deals unable to resolve their
+// prospect. Walk the result set in pages instead.
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 8;
+
+type PagedQuery = { range: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }> };
+
+const fetchAllRows = async <T,>(buildQuery: () => PagedQuery): Promise<{ data: T[]; error: { message: string } | null }> => {
+  const rows: T[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const from = page * PAGE_SIZE;
+    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
+    if (error) return { data: rows, error };
+    const batch = (data ?? []) as T[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+  }
+  return { data: rows, error: null };
+};
 
 export const NegociacionesKanban = () => {
   const { profile } = useAuth();
@@ -56,20 +77,26 @@ export const NegociacionesKanban = () => {
     if (!profile) return;
     if (showLoader) setLoading(true);
     setError("");
-    let dealsQuery = supabase.from("deals").select("*").order("updated_at", { ascending: false }).limit(5000);
-    let leadsQuery = supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(5000);
-    let activitiesQuery = supabase.from("activities").select("*").order("created_at", { ascending: false }).limit(5000);
-    if (profile.role === "AGENT") {
-      dealsQuery = dealsQuery.eq("agent_id", profile.id);
-      leadsQuery = leadsQuery.eq("agent_id", profile.id);
-      activitiesQuery = activitiesQuery.eq("user_id", profile.id);
-    } else if (isAuditMode && profile.role === "SUPERVISOR" && profile.team_id) {
-      dealsQuery = dealsQuery.eq("team_id", profile.team_id);
-      leadsQuery = leadsQuery.eq("team_id", profile.team_id);
-    }
+    const buildDealsQuery = () => {
+      let query = supabase.from("deals").select("*").order("updated_at", { ascending: false });
+      if (profile.role === "AGENT") query = query.eq("agent_id", profile.id);
+      else if (isAuditMode && profile.role === "SUPERVISOR" && profile.team_id) query = query.eq("team_id", profile.team_id);
+      return query;
+    };
+    const buildLeadsQuery = () => {
+      let query = supabase.from("leads").select("*").order("created_at", { ascending: false });
+      if (profile.role === "AGENT") query = query.eq("agent_id", profile.id);
+      else if (isAuditMode && profile.role === "SUPERVISOR" && profile.team_id) query = query.eq("team_id", profile.team_id);
+      return query;
+    };
+    // Activities are only rendered as recent history, so they stay on a single
+    // capped query — paginating them would pull tens of thousands of rows.
+    let activitiesQuery = supabase.from("activities").select("*").order("created_at", { ascending: false }).limit(1000);
+    if (profile.role === "AGENT") activitiesQuery = activitiesQuery.eq("user_id", profile.id);
+
     const [dealResult, leadResult, activityResult, profileResult] = await Promise.all([
-      dealsQuery,
-      leadsQuery,
+      fetchAllRows<Deal>(buildDealsQuery),
+      fetchAllRows<Lead>(buildLeadsQuery),
       activitiesQuery,
       supabase.from("profiles").select("*").eq("active", true).order("first_name"),
     ]);
@@ -247,6 +274,30 @@ export const NegociacionesKanban = () => {
     setCloseTarget(null); setClosingDeal(null);
   };
 
+  // Typification lives on the prospect (leads.contact_outcome). Writing it from
+  // the pipeline keeps a single source of truth shared with the Prospectos
+  // screen, so the same call never has to be registered twice.
+  const updateLeadOutcome = async (lead: Lead, outcome: NonNullable<Lead["contact_outcome"]>) => {
+    if (!canMutate || lead.contact_outcome === outcome) return;
+    setSaving(true);
+    const { data, error: outcomeError } = await supabase
+      .from("leads")
+      .update({ contact_outcome: outcome })
+      .eq("id", lead.id)
+      .select()
+      .single();
+    setSaving(false);
+    if (outcomeError) { setError(outcomeError.message); return; }
+    const updated = data as Lead;
+    setLeads((current) => current.map((item) => item.id === updated.id ? updated : item));
+    await logActivity({
+      lead_id: updated.id,
+      title: "Tipificación actualizada",
+      description: `${updated.first_name} ${updated.last_name}: ${CONTACT_OUTCOME_CONFIG[outcome].label}.`,
+      type: "typification",
+    });
+  };
+
   const handleDrop = (event: React.DragEvent, stage: PipelineStage) => {
     event.preventDefault(); setDragOverStage(null);
     const deal = activeDeals.find((item) => item.id === event.dataTransfer.getData("dealId"));
@@ -367,12 +418,12 @@ export const NegociacionesKanban = () => {
         <p className="text-xs text-muted-foreground">{filteredDeals.length} negociaciones · {leadsWithoutDeal.length} prospectos por convertir</p>
       </div>
 
-      {viewMode === "kanban" && <KanbanView deals={filteredDeals} leads={activeLeads} leadsWithoutDeal={leadsWithoutDeal} dragOverStage={dragOverStage} onDragStart={(event, dealId) => { event.dataTransfer.setData("dealId", dealId); event.dataTransfer.effectAllowed = "move"; }} onDragOver={(event, stage) => { if (!canMutate) return; event.preventDefault(); setDragOverStage(stage); }} onDragLeave={() => setDragOverStage(null)} onDrop={handleDrop} onOpenDeal={(deal) => void openDeal(deal)} onEditDeal={openEditDeal} onDeleteDeal={(deal) => setConfirmTarget({ type: "deal", id: deal.id, name: deal.name })} onCreateFromLead={(lead) => openCreateDeal(lead)} canDelete={canDelete} />}
-      {viewMode === "list" && <DealsListView deals={filteredDeals} leads={activeLeads} onOpenDeal={(deal) => void openDeal(deal)} onEditDeal={openEditDeal} onDeleteDeal={(deal) => setConfirmTarget({ type: "deal", id: deal.id, name: deal.name })} canDelete={canDelete} />}
+      {viewMode === "kanban" && <KanbanView deals={filteredDeals} leads={activeLeads} leadsWithoutDeal={leadsWithoutDeal} dragOverStage={dragOverStage} onDragStart={(event, dealId) => { event.dataTransfer.setData("dealId", dealId); event.dataTransfer.effectAllowed = "move"; }} onDragOver={(event, stage) => { if (!canMutate) return; event.preventDefault(); setDragOverStage(stage); }} onDragLeave={() => setDragOverStage(null)} onDrop={handleDrop} onOpenDeal={(deal) => void openDeal(deal)} onEditDeal={openEditDeal} onDeleteDeal={(deal) => setConfirmTarget({ type: "deal", id: deal.id, name: deal.name })} onCreateFromLead={(lead) => openCreateDeal(lead)} canDelete={canDelete} onOutcomeChange={canMutate ? (lead, outcome) => void updateLeadOutcome(lead, outcome) : undefined} />}
+      {viewMode === "list" && <DealsListView deals={filteredDeals} leads={activeLeads} onOpenDeal={(deal) => void openDeal(deal)} onEditDeal={openEditDeal} onDeleteDeal={(deal) => setConfirmTarget({ type: "deal", id: deal.id, name: deal.name })} canDelete={canDelete} onStageChange={requestStageChange} canMutate={canMutate} onOutcomeChange={canMutate ? (lead, outcome) => void updateLeadOutcome(lead, outcome) : undefined} />}
       {viewMode === "activities" && <ActivitiesView activities={scheduledActivities} deals={activeDeals} onOpenDeal={(deal) => void openDeal(deal)} onComplete={(activity) => void completeActivity(activity)} onPostpone={setPostponingActivity} onDelete={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManage={(activity) => canMutate && activity.user_id === profile?.id} />}
       {viewMode === "calendar" && <CalendarView activities={scheduledActivities} deals={activeDeals} month={calendarMonth} onMonthChange={setCalendarMonth} onOpenDeal={(deal) => void openDeal(deal)} />}
 
-      <DealWorkspaceSheet open={workspaceOpen} deal={selectedDeal} lead={selectedLead} agent={selectedAgent} activities={selectedActivities} notes={notes} saving={saving} onOpenChange={setWorkspaceOpen} onStageChange={(stage) => selectedDeal && requestStageChange(selectedDeal, stage)} onEdit={openEditDeal} onCreateActivity={createActivity} onCompleteActivity={(activity) => void completeActivity(activity)} onPostponeActivity={setPostponingActivity} onDeleteActivity={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManageActivity={(activity) => canMutate && activity.user_id === profile?.id} onCreateNote={createNote} />
+      <DealWorkspaceSheet open={workspaceOpen} deal={selectedDeal} lead={selectedLead} agent={selectedAgent} activities={selectedActivities} notes={notes} saving={saving} onOpenChange={setWorkspaceOpen} onStageChange={(stage) => selectedDeal && requestStageChange(selectedDeal, stage)} onEdit={openEditDeal} onCreateActivity={createActivity} onCompleteActivity={(activity) => void completeActivity(activity)} onPostponeActivity={setPostponingActivity} onDeleteActivity={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManageActivity={(activity) => canMutate && activity.user_id === profile?.id} onCreateNote={createNote} onOutcomeChange={canMutate ? (lead, outcome) => void updateLeadOutcome(lead, outcome) : undefined} />
       <DealFormDialog open={dealFormOpen} saving={saving} deal={editingDeal} preferredLead={preferredLead} leads={activeLeads} agents={eligibleAgents} defaultAgentId={isAgent ? profile?.id : undefined} onOpenChange={setDealFormOpen} onSubmit={saveDeal} />
       <CloseDealDialog open={Boolean(closeTarget)} saving={saving} deal={closingDeal} targetStage={closeTarget} onOpenChange={(open) => { if (!open) { setCloseTarget(null); setClosingDeal(null); } }} onConfirm={closeDeal} />
       <PostponeDialog open={Boolean(postponingActivity)} saving={saving} currentDueAt={postponingActivity?.due_at} onOpenChange={(open) => !open && setPostponingActivity(null)} onConfirm={postponeActivity} />

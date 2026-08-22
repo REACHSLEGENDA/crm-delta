@@ -202,7 +202,8 @@ export const ContactCenter = () => {
           in_call_queue: false,
           contact_outcome:
             disposition === "Número inexistente" ? "invalid_number" :
-            disposition === "Buzón" ? "direct_voicemail" : "valid",
+            disposition === "Buzón" ? "direct_voicemail" :
+            disposition === "No contestó" ? "no_answer" : "valid",
         };
         if (disposition === "Depósito confirmado") leadUpdate.status = "Depósito pendiente";
         else if (disposition === "Interesado") leadUpdate.status = "Interesado";
@@ -382,6 +383,7 @@ export const ContactCenter = () => {
                         <option value="Interesado">Interesado</option>
                         <option value="No interesado">No interesado</option>
                         <option value="Buzón">Buzón directo</option>
+                        <option value="No contestó">No contestó</option>
                         <option value="Número inexistente">Número inexistente</option>
                         <option value="Callback">Callback</option>
                         <option value="Depósito confirmado">Depósito confirmado</option>

@@ -2,6 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "rea
 import { ArchiveX, History, Mail, Phone, Search, ShieldCheck, UserRound } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import type { Lead, Profile } from "@/types";
 
 interface AssignmentRow {
@@ -19,6 +20,7 @@ const OUTCOME_LABELS: Record<string, string> = {
 
 export const BurnList = () => {
   const { profile } = useAuth();
+  const { isSuperAdmin } = usePermissions();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [agents, setAgents] = useState<Profile[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
@@ -91,6 +93,22 @@ export const BurnList = () => {
     assignments.forEach((row) => map.set(row.lead_id, [...(map.get(row.lead_id) ?? []), row]));
     return map;
   }, [assignments]);
+
+  if (!isSuperAdmin) {
+    return (
+      <section className="app-page">
+        <div className="app-panel grid min-h-56 place-items-center px-6 text-center">
+          <div>
+            <ShieldCheck className="mx-auto mb-3 h-9 w-9 text-destructive" aria-hidden="true" />
+            <p className="font-semibold text-foreground">Acceso restringido</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Este apartado solo está disponible para administradores.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="app-page" aria-labelledby="burn-title">

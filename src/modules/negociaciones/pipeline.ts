@@ -1,4 +1,4 @@
-import type { DealStage, LeadStatus } from "@/types";
+import type { DealStage, LeadContactOutcome, LeadStatus } from "@/types";
 
 export const PIPELINE_STAGES = [
   "Nuevo lead",
@@ -75,6 +75,22 @@ export const STAGE_CONFIG: Record<PipelineStage, StageConfig> = {
 export const ACTIVE_STAGES = PIPELINE_STAGES.filter(
   (stage) => stage !== "Ganado" && stage !== "Perdido",
 );
+
+/** Call-quality typification carried by the prospect (leads.contact_outcome). */
+export interface ContactOutcomeConfig {
+  label: string;
+  color: string;
+}
+
+export const CONTACT_OUTCOME_CONFIG: Record<LeadContactOutcome, ContactOutcomeConfig> = {
+  pending: { label: "Sin clasificar", color: "var(--muted-foreground)" },
+  valid: { label: "Número válido", color: "var(--success)" },
+  no_answer: { label: "No contestó", color: "var(--warning)" },
+  direct_voicemail: { label: "Buzón directo", color: "var(--warning)" },
+  invalid_number: { label: "Número inexistente", color: "var(--danger)" },
+};
+
+export const CONTACT_OUTCOMES = Object.keys(CONTACT_OUTCOME_CONFIG) as LeadContactOutcome[];
 
 export const LOSS_REASONS = [
   "No respondió",
