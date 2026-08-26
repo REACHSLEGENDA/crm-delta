@@ -130,7 +130,7 @@ const App = () => {
             path="/import-export"
             element={
               <ProtectedRoute>
-                <RoleGuard allowedRoles={["SUPERADMIN", "MANAGER"]}>
+                <RoleGuard allowedRoles={["SUPERADMIN"]}>
                   <DashboardLayout>
                     <ImportExportPage />
                   </DashboardLayout>

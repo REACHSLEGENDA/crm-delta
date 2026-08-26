@@ -9,12 +9,14 @@ import { removeAttachment, uploadAttachment } from "@/lib/attachments";
 import { ActivitiesView, CalendarView, DealsListView, KanbanView } from "./PipelineViews";
 import { DealWorkspaceSheet, type ActivityDraft } from "./DealWorkspaceSheet";
 import { CloseDealDialog, DealFormDialog, PostponeDialog, type DealFormPayload } from "./DealDialogs";
-import { ACTIVE_STAGES, CONTACT_OUTCOME_CONFIG, PIPELINE_STAGES, formatCurrency, type PipelineStage } from "./pipeline";
+import { ACTIVE_STAGES, CONTACT_OUTCOME_CONFIG, formatCurrency, type PipelineStage } from "./pipeline";
+import { PIPELINE_CONFIG, stagesForPipeline, visiblePipelines, type DealPipeline } from "./pipelines";
 
 type ViewMode = "kanban" | "list" | "activities" | "calendar";
 interface ConfirmTarget { type: "deal" | "activity"; id: string; name: string; }
 
 const VIEW_KEY = "delta-capital-pipeline-view";
+const PIPELINE_KEY = "delta-capital-active-pipeline";
 const MAX_REMINDER_DELAY = 7 * 24 * 60 * 60 * 1000;
 const VIEW_OPTIONS: Array<{ value: ViewMode; label: string; icon: typeof Columns3 }> = [
   { value: "kanban", label: "Kanban", icon: Columns3 },
@@ -57,6 +59,7 @@ export const NegociacionesKanban = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>(() => safeViewMode(localStorage.getItem(VIEW_KEY)));
+  const [pipeline, setPipeline] = useState<DealPipeline>("Ventas");
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
@@ -71,7 +74,23 @@ export const NegociacionesKanban = () => {
   const [closeTarget, setCloseTarget] = useState<"Ganado" | "Perdido" | null>(null);
   const [postponingActivity, setPostponingActivity] = useState<Activity | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
+  const [resetTarget, setResetTarget] = useState<Deal | null>(null);
   const canMutate = !isAuditMode && !isCompliance;
+
+  const availablePipelines = useMemo(
+    () => visiblePipelines(profile?.role, profile?.department),
+    [profile?.department, profile?.role],
+  );
+
+  // Restore the last pipeline the user opened, but never one they cannot see.
+  useEffect(() => {
+    const stored = localStorage.getItem(PIPELINE_KEY) as DealPipeline | null;
+    setPipeline(stored && availablePipelines.includes(stored) ? stored : availablePipelines[0] ?? "Ventas");
+  }, [availablePipelines]);
+
+  useEffect(() => { localStorage.setItem(PIPELINE_KEY, pipeline); }, [pipeline]);
+
+  const pipelineStages = useMemo(() => stagesForPipeline(pipeline) as readonly PipelineStage[], [pipeline]);
 
   const fetchData = useCallback(async (showLoader = true) => {
     if (!profile) return;
@@ -126,7 +145,10 @@ export const NegociacionesKanban = () => {
 
   const activeLeads = useMemo(() => leads.filter((lead) => !lead.is_burned), [leads]);
   const burnedLeadIds = useMemo(() => new Set(leads.filter((lead) => lead.is_burned).map((lead) => lead.id)), [leads]);
-  const activeDeals = useMemo(() => deals.filter((deal) => !deal.lead_id || !burnedLeadIds.has(deal.lead_id)), [burnedLeadIds, deals]);
+  const activeDeals = useMemo(
+    () => deals.filter((deal) => (deal.pipeline ?? "Ventas") === pipeline && (!deal.lead_id || !burnedLeadIds.has(deal.lead_id))),
+    [burnedLeadIds, deals, pipeline],
+  );
   const eligibleAgents = useMemo(() => agents.filter((agent) => {
     if (agent.role !== "AGENT") return false;
     if (isSuperAdmin) return true;
@@ -298,6 +320,22 @@ export const NegociacionesKanban = () => {
     });
   };
 
+  // Administrative rollback: drops the Cumplimiento/Retencion records and puts
+  // the account back at the start of Ventas. SUPERADMIN only, enforced in the DB.
+  const resetAccount = async () => {
+    if (!resetTarget?.lead_id) { setResetTarget(null); return; }
+    setSaving(true);
+    const { error: resetError } = await supabase.rpc("reset_account_to_sales", {
+      target_lead_id: resetTarget.lead_id,
+      reset_reason: `Reinicio solicitado sobre ${resetTarget.name}.`,
+    });
+    setSaving(false);
+    setResetTarget(null);
+    if (resetError) { setError(resetError.message); return; }
+    setWorkspaceOpen(false);
+    await fetchData(false);
+  };
+
   const handleDrop = (event: React.DragEvent, stage: PipelineStage) => {
     event.preventDefault(); setDragOverStage(null);
     const deal = activeDeals.find((item) => item.id === event.dataTransfer.getData("dealId"));
@@ -385,6 +423,29 @@ export const NegociacionesKanban = () => {
       </header>
       {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive"><span>{error}</span><button type="button" onClick={() => setError("")} className="font-semibold underline">Cerrar</button></div>}
 
+      {availablePipelines.length > 1 && (
+        <div role="tablist" aria-label="Embudo" className="inline-flex flex-wrap gap-1 rounded-2xl border border-border bg-card p-1">
+          {availablePipelines.map((option) => {
+            const config = PIPELINE_CONFIG[option];
+            const isActive = pipeline === option;
+            return (
+              <button
+                key={option}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => { setPipeline(option); setStageFilter(""); }}
+                className={`min-h-11 rounded-xl px-4 text-left transition-colors ${isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+                title={config.description}
+              >
+                <span className="block text-sm font-bold">{config.label}</span>
+                <span className={`block text-[10px] ${isActive ? "opacity-80" : "opacity-70"}`}>{config.description}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: "Pipeline activo", value: formatCurrency(metrics.pipeline), icon: TrendingUp, v: "--primary", text: "text-primary" },
@@ -406,7 +467,7 @@ export const NegociacionesKanban = () => {
 
       <div className="surface-card grid gap-3 p-3 lg:grid-cols-[minmax(240px,1fr)_180px_200px_auto]">
         <label className="relative"><span className="sr-only">Buscar negociación</span><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar negociación, prospecto, teléfono…" className="h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /></label>
-        <select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)} aria-label="Filtrar por etapa" className="h-11 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="">Todas las etapas</option>{PIPELINE_STAGES.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select>
+        <select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)} aria-label="Filtrar por etapa" className="h-11 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="">Todas las etapas</option>{pipelineStages.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select>
         <select value={agentFilter} onChange={(event) => setAgentFilter(event.target.value)} aria-label="Filtrar por agente" className="h-11 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="">Todos los agentes</option>{eligibleAgents.map((agent) => <option key={agent.id} value={agent.id}>{agent.first_name} {agent.last_name}</option>)}</select>
         <button type="button" onClick={clearFilters} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold hover:bg-accent"><FilterX className="h-4 w-4" /> Limpiar</button>
       </div>
@@ -418,15 +479,22 @@ export const NegociacionesKanban = () => {
         <p className="text-xs text-muted-foreground">{filteredDeals.length} negociaciones · {leadsWithoutDeal.length} prospectos por convertir</p>
       </div>
 
-      {viewMode === "kanban" && <KanbanView deals={filteredDeals} leads={activeLeads} leadsWithoutDeal={leadsWithoutDeal} dragOverStage={dragOverStage} onDragStart={(event, dealId) => { event.dataTransfer.setData("dealId", dealId); event.dataTransfer.effectAllowed = "move"; }} onDragOver={(event, stage) => { if (!canMutate) return; event.preventDefault(); setDragOverStage(stage); }} onDragLeave={() => setDragOverStage(null)} onDrop={handleDrop} onOpenDeal={(deal) => void openDeal(deal)} onEditDeal={openEditDeal} onDeleteDeal={(deal) => setConfirmTarget({ type: "deal", id: deal.id, name: deal.name })} onCreateFromLead={(lead) => openCreateDeal(lead)} canDelete={canDelete} onOutcomeChange={canMutate ? (lead, outcome) => void updateLeadOutcome(lead, outcome) : undefined} />}
+      {viewMode === "kanban" && <KanbanView stages={pipelineStages} deals={filteredDeals} leads={activeLeads} leadsWithoutDeal={leadsWithoutDeal} dragOverStage={dragOverStage} onDragStart={(event, dealId) => { event.dataTransfer.setData("dealId", dealId); event.dataTransfer.effectAllowed = "move"; }} onDragOver={(event, stage) => { if (!canMutate) return; event.preventDefault(); setDragOverStage(stage); }} onDragLeave={() => setDragOverStage(null)} onDrop={handleDrop} onOpenDeal={(deal) => void openDeal(deal)} onEditDeal={openEditDeal} onDeleteDeal={(deal) => setConfirmTarget({ type: "deal", id: deal.id, name: deal.name })} onCreateFromLead={(lead) => openCreateDeal(lead)} canDelete={canDelete} onOutcomeChange={canMutate ? (lead, outcome) => void updateLeadOutcome(lead, outcome) : undefined} />}
       {viewMode === "list" && <DealsListView deals={filteredDeals} leads={activeLeads} onOpenDeal={(deal) => void openDeal(deal)} onEditDeal={openEditDeal} onDeleteDeal={(deal) => setConfirmTarget({ type: "deal", id: deal.id, name: deal.name })} canDelete={canDelete} onStageChange={requestStageChange} canMutate={canMutate} onOutcomeChange={canMutate ? (lead, outcome) => void updateLeadOutcome(lead, outcome) : undefined} />}
       {viewMode === "activities" && <ActivitiesView activities={scheduledActivities} deals={activeDeals} onOpenDeal={(deal) => void openDeal(deal)} onComplete={(activity) => void completeActivity(activity)} onPostpone={setPostponingActivity} onDelete={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManage={(activity) => canMutate && activity.user_id === profile?.id} />}
       {viewMode === "calendar" && <CalendarView activities={scheduledActivities} deals={activeDeals} month={calendarMonth} onMonthChange={setCalendarMonth} onOpenDeal={(deal) => void openDeal(deal)} />}
 
-      <DealWorkspaceSheet open={workspaceOpen} deal={selectedDeal} lead={selectedLead} agent={selectedAgent} activities={selectedActivities} notes={notes} saving={saving} onOpenChange={setWorkspaceOpen} onStageChange={(stage) => selectedDeal && requestStageChange(selectedDeal, stage)} onEdit={openEditDeal} onCreateActivity={createActivity} onCompleteActivity={(activity) => void completeActivity(activity)} onPostponeActivity={setPostponingActivity} onDeleteActivity={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManageActivity={(activity) => canMutate && activity.user_id === profile?.id} onCreateNote={createNote} onOutcomeChange={canMutate ? (lead, outcome) => void updateLeadOutcome(lead, outcome) : undefined} />
+      <DealWorkspaceSheet open={workspaceOpen} deal={selectedDeal} lead={selectedLead} agent={selectedAgent} activities={selectedActivities} notes={notes} saving={saving} onOpenChange={setWorkspaceOpen} onStageChange={(stage) => selectedDeal && requestStageChange(selectedDeal, stage)} onEdit={openEditDeal} onCreateActivity={createActivity} onCompleteActivity={(activity) => void completeActivity(activity)} onPostponeActivity={setPostponingActivity} onDeleteActivity={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManageActivity={(activity) => canMutate && activity.user_id === profile?.id} onCreateNote={createNote} onResetAccount={isSuperAdmin ? setResetTarget : undefined} onOutcomeChange={canMutate ? (lead, outcome) => void updateLeadOutcome(lead, outcome) : undefined} />
       <DealFormDialog open={dealFormOpen} saving={saving} deal={editingDeal} preferredLead={preferredLead} leads={activeLeads} agents={eligibleAgents} defaultAgentId={isAgent ? profile?.id : undefined} onOpenChange={setDealFormOpen} onSubmit={saveDeal} />
       <CloseDealDialog open={Boolean(closeTarget)} saving={saving} deal={closingDeal} targetStage={closeTarget} onOpenChange={(open) => { if (!open) { setCloseTarget(null); setClosingDeal(null); } }} onConfirm={closeDeal} />
       <PostponeDialog open={Boolean(postponingActivity)} saving={saving} currentDueAt={postponingActivity?.due_at} onOpenChange={(open) => !open && setPostponingActivity(null)} onConfirm={postponeActivity} />
+      <ConfirmModal
+        isOpen={Boolean(resetTarget)}
+        title="Regresar la cuenta al inicio"
+        message={`Se eliminarán los expedientes de Cumplimiento y Retención de “${resetTarget?.name ?? "esta cuenta"}” y la negociación volverá a la primera etapa de Ventas. Esta acción no se puede deshacer.`}
+        onConfirm={() => void resetAccount()}
+        onCancel={() => setResetTarget(null)}
+      />
       <ConfirmModal isOpen={Boolean(confirmTarget)} title={confirmTarget?.type === "deal" ? "Eliminar negociación" : "Eliminar actividad"} message={`¿Deseas eliminar “${confirmTarget?.name ?? "este registro"}”? Esta acción no se puede deshacer.`} onConfirm={() => void confirmDelete()} onCancel={() => setConfirmTarget(null)} />
     </section>
   );

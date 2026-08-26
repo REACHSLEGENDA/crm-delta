@@ -22,6 +22,7 @@ import {
   isPipelineStage,
   type PipelineStage,
 } from "./pipeline";
+import { stageMeta } from "./pipelines";
 
 type OutcomeValue = NonNullable<Lead["contact_outcome"]>;
 type OutcomeChangeHandler = (lead: Lead, outcome: OutcomeValue) => void;
@@ -91,6 +92,8 @@ interface SharedDealProps {
 }
 
 interface KanbanViewProps extends SharedDealProps {
+  /** Stages of the active pipeline — the board renders one column per stage. */
+  stages: readonly PipelineStage[];
   leadsWithoutDeal: Lead[];
   dragOverStage: PipelineStage | null;
   onDragStart: (event: React.DragEvent, dealId: string) => void;
@@ -104,6 +107,7 @@ interface KanbanViewProps extends SharedDealProps {
 const getLead = (deal: Deal, leads: Lead[]) => leads.find((lead) => lead.id === deal.lead_id);
 
 export const KanbanView = ({
+  stages,
   deals,
   leads,
   leadsWithoutDeal,
@@ -119,9 +123,10 @@ export const KanbanView = ({
   canDelete,
   onOutcomeChange,
 }: KanbanViewProps) => (
-  <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-    {PIPELINE_STAGES.map((stage) => {
-      const config = STAGE_CONFIG[stage];
+  <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4"
+    style={{ gridTemplateColumns: `repeat(auto-fit, minmax(200px, 1fr))` }}>
+    {stages.map((stage) => {
+      const config = stageMeta(stage);
       const stageDeals = deals.filter((deal) => deal.stage === stage);
       const showUnlinkedLeads = stage === "Nuevo lead";
       const total = stageDeals.reduce((sum, deal) => sum + Number(deal.value || 0), 0);
@@ -175,7 +180,7 @@ export const KanbanView = ({
                       </div>
                     </div>
                   </div>
-                  <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border pt-2">
+                  <div className="mt-2.5 border-t border-border pt-2">
                     <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
                       {lead ? (
                         <>
@@ -186,7 +191,7 @@ export const KanbanView = ({
                         <span className="italic text-muted-foreground/60">Sin prospecto</span>
                       )}
                     </div>
-                    <div className="flex shrink-0 gap-1 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                    <div className="mt-1.5 flex shrink-0 justify-end gap-1 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                       <button
                         type="button"
                         onClick={(event) => { event.stopPropagation(); onEditDeal(deal); }}

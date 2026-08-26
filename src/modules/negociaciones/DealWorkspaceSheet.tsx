@@ -19,6 +19,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { CopyableField } from "@/components/ui/CopyableField";
+import { ComplianceChecklist } from "./ComplianceChecklist";
 import { openAttachment } from "@/lib/attachments";
 import type { Activity, Deal, FileAttachment, Lead, Note, Profile } from "@/types";
 import { CONTACT_OUTCOME_CONFIG, PIPELINE_STAGES, STAGE_CONFIG, formatCurrency, isPipelineStage, type PipelineStage } from "./pipeline";
@@ -49,6 +51,8 @@ interface DealWorkspaceSheetProps {
   onCreateNote: (content: string, files: File[]) => Promise<void>;
   /** Writes the typification straight to the prospect (single source of truth). */
   onOutcomeChange?: (lead: Lead, outcome: NonNullable<Lead["contact_outcome"]>) => void;
+  /** Admin-only rollback to the start of the sales pipeline. */
+  onResetAccount?: (deal: Deal) => void;
 }
 
 const toLocalDateTimeValue = (date: Date) => {
@@ -81,6 +85,7 @@ export const DealWorkspaceSheet = ({
   canManageActivity = () => true,
   onCreateNote,
   onOutcomeChange,
+  onResetAccount,
 }: DealWorkspaceSheetProps) => {
   const [activityDraft, setActivityDraft] = useState<ActivityDraft>({
     title: "Comunicarse con el cliente",
@@ -137,7 +142,20 @@ export const DealWorkspaceSheet = ({
                 {agent && <span>Responsable: {agent.first_name} {agent.last_name}</span>}
               </SheetDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={() => onEdit(deal)}>Editar negociación</Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {onResetAccount && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onResetAccount(deal)}
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  title="Elimina los expedientes de Cumplimiento y Retención y devuelve la cuenta al inicio de Ventas"
+                >
+                  <RotateCcw /> Regresar al inicio
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => onEdit(deal)}>Editar negociación</Button>
+            </div>
           </div>
         </SheetHeader>
 
@@ -196,6 +214,10 @@ export const DealWorkspaceSheet = ({
               </dl>
             </section>
 
+            {deal.pipeline === "Cumplimiento" && lead && (
+              <ComplianceChecklist leadId={lead.id} canReview={Boolean(onOutcomeChange)} />
+            )}
+
             <section className="surface-card p-5">
               <h2 className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Prospecto</h2>
               {lead ? (
@@ -207,8 +229,8 @@ export const DealWorkspaceSheet = ({
                       <p className="truncate text-xs text-muted-foreground">{lead.country || "País sin registrar"}</p>
                     </div>
                   </div>
-                  {lead.email && <a href={`mailto:${lead.email}`} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"><Mail className="h-4 w-4" /> <span className="truncate">{lead.email}</span></a>}
-                  {lead.phone && <a href={`tel:${lead.phone}`} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"><Phone className="h-4 w-4" /> {lead.phone}</a>}
+                  {lead.email && <CopyableField value={lead.email} label="correo" icon={<Mail className="h-4 w-4 shrink-0" />} />}
+                  {lead.phone && <CopyableField value={lead.phone} label="teléfono" icon={<Phone className="h-4 w-4 shrink-0" />} />}
 
                   {onOutcomeChange && (
                     <div className="border-t border-border pt-3">

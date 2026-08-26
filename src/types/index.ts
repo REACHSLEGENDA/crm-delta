@@ -1,7 +1,13 @@
 export type UserRole = 'SUPERADMIN' | 'MANAGER' | 'AGENT' | 'SUPERVISOR';
 export type Department = 'Ventas' | 'Retencion' | 'Cumplimiento';
 export type LeadStatus = 'Nuevo' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido' | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
-export type DealStage = 'Nuevo lead' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido' | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
+export type SalesStage = 'Nuevo lead' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido';
+export type ComplianceStage = 'KYC pendiente' | 'Documentos en revisión' | 'Contrato pendiente' | 'Aprobado' | 'Rechazado';
+export type RetentionStage = 'R1 Bienvenida' | 'R2 Perfil de riesgo' | 'R3 Primera estrategia' | 'R4 Seguimiento inicial' | 'R5 Re-depósito' | 'R6 Consolidación' | 'R7 Fidelización';
+
+export type DealStage = SalesStage | ComplianceStage | RetentionStage | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
+
+export type DealPipeline = 'Ventas' | 'Cumplimiento' | 'Retencion';
 export type CallDisposition = 'Interesado' | 'No interesado' | 'Buzón' | 'Número inexistente' | 'Callback' | 'Depósito confirmado' | 'No contestó';
 export type LeadContactOutcome = 'pending' | 'valid' | 'invalid_number' | 'direct_voicemail' | 'no_answer';
 export type ChannelType = 'general' | 'ventas' | 'soporte' | 'alertas' | 'privado';
@@ -92,6 +98,8 @@ export interface Deal {
   name: string;
   value: number;
   stage: DealStage;
+  pipeline?: DealPipeline;
+  sales_agent_id?: string | null;
   lead_id?: string;
   agent_id?: string | null;
   team_id?: string | null;
@@ -174,6 +182,10 @@ export interface ComplianceDocument {
   file_path: string;
   file_name: string;
   uploaded_by?: string | null;
+  status?: 'pendiente' | 'aprobado' | 'rechazado';
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_notes?: string | null;
   created_at: string;
 }
 

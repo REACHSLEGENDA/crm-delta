@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { AlertTriangle, X } from "lucide-react";
 
 interface ConfirmModalProps {
@@ -12,38 +13,52 @@ interface ConfirmModalProps {
 export const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, isDestructive = true }: ConfirmModalProps) => {
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#0D1428] border border-[rgba(212,175,55,0.2)] rounded-xl w-full max-w-sm p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
-        <button 
+  // Rendered through a portal on <body>. Radix sheets and dialogs mount their
+  // own portal and set `pointer-events: none` on the page while open, so a modal
+  // living inside the page tree stays visible but stops receiving clicks.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      style={{ pointerEvents: "auto" }}
+      onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div className="relative w-full max-w-sm animate-in rounded-xl border border-border bg-popover p-6 shadow-2xl duration-200 fade-in zoom-in-95">
+        <button
+          type="button"
           onClick={onCancel}
-          className="absolute right-4 top-4 text-[#94A3B8] hover:text-[#F8FAFC] transition-colors"
+          className="absolute right-4 top-4 text-muted-foreground transition-colors hover:text-foreground"
+          aria-label="Cerrar"
         >
           <X className="h-4 w-4" />
         </button>
-        
-        <div className="flex flex-col items-center text-center gap-4">
-          <div className={`p-3 rounded-full ${isDestructive ? 'bg-[rgba(239,68,68,0.1)] text-[#EF4444]' : 'bg-[rgba(212,175,55,0.1)] text-[#D4AF37]'}`}>
+
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className={`rounded-full p-3 ${isDestructive ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
             <AlertTriangle className="h-6 w-6" />
           </div>
-          
+
           <div>
-            <h3 className="text-lg font-title font-bold text-[#F8FAFC]">{title}</h3>
-            <p className="text-sm text-[#94A3B8] mt-2">{message}</p>
+            <h3 className="font-title text-lg font-bold text-foreground">{title}</h3>
+            <p className="mt-2 text-sm text-muted-foreground">{message}</p>
           </div>
 
-          <div className="flex gap-3 w-full mt-4">
+          <div className="mt-4 flex w-full gap-3">
             <button
+              type="button"
               onClick={onCancel}
-              className="flex-1 py-2 rounded text-xs font-semibold bg-[#111A33] border border-[rgba(255,255,255,0.1)] text-[#F8FAFC] hover:bg-[rgba(255,255,255,0.05)] transition-colors"
+              className="flex-1 rounded-lg border border-border bg-card py-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-accent"
             >
               Cancelar
             </button>
             <button
-              onClick={() => { onConfirm(); onCancel(); }}
-              className={`flex-1 py-2 rounded text-xs font-bold transition-colors ${
-                isDestructive 
-                  ? "bg-[#EF4444] hover:bg-[#DC2626] text-white" 
+              type="button"
+              onClick={(event) => { event.preventDefault(); event.stopPropagation(); onConfirm(); onCancel(); }}
+              className={`flex-1 rounded-lg py-2.5 text-xs font-bold transition-colors ${
+                isDestructive
+                  ? "bg-destructive text-white hover:brightness-110"
                   : "gold-button-primary"
               }`}
             >
@@ -52,6 +67,7 @@ export const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, isDe
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
