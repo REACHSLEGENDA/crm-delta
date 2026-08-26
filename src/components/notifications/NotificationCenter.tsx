@@ -11,36 +11,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const SOUND_KEY = "delta-capital-notification-sound";
-
-const playNotificationTone = () => {
-  try {
-    const AudioContextClass = window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const context = new AudioContextClass();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(740, context.currentTime);
-    gain.gain.setValueAtTime(0.0001, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.11, context.currentTime + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.2);
-    oscillator.addEventListener("ended", () => void context.close());
-  } catch {
-    // Browser audio is a progressive enhancement; the notification still appears.
-  }
-};
+import { SOUND_KEY, playMessageTone, playNotificationTone, setSoundEnabled as persistSound } from "@/lib/sound";
 
 export const NotificationCenter = () => {
   const { profile } = useAuth();
   const [notifications, setNotifications] = useState<CRMNotification[]>([]);
-  const [soundEnabled, setSoundEnabled] = useState(
+  const [soundEnabled, setSoundEnabledState] = useState(
     () => localStorage.getItem(SOUND_KEY) !== "off",
   );
 
@@ -90,6 +66,39 @@ export const NotificationCenter = () => {
     };
   }, [fetchNotifications, profile?.id, soundEnabled]);
 
+  // Chat messages only reach the chat screen, and only for the channel that is
+  // open. This listens app-wide so an agent hears a message while working
+  // anywhere in the CRM. Membership is checked against the channels the user can
+  // read (RLS already limits that list).
+  useEffect(() => {
+    if (!profile?.id) return;
+    let myChannelIds: string[] = [];
+    let disposed = false;
+
+    void supabase.from("channels").select("id").then(({ data }) => {
+      if (!disposed) myChannelIds = (data ?? []).map((row) => row.id as string);
+    });
+
+    const channel = supabase
+      .channel(`chat_sound_${profile.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          const message = payload.new as { user_id?: string; channel_id?: string };
+          if (message.user_id === profile.id) return;
+          if (!message.channel_id || !myChannelIds.includes(message.channel_id)) return;
+          playMessageTone();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      disposed = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [profile?.id]);
+
   const markAllRead = async () => {
     if (!profile?.id || unreadCount === 0) return;
     setNotifications((current) => current.map((item) => ({ ...item, read: true })));
@@ -107,8 +116,8 @@ export const NotificationCenter = () => {
 
   const toggleSound = () => {
     const nextValue = !soundEnabled;
-    setSoundEnabled(nextValue);
-    localStorage.setItem(SOUND_KEY, nextValue ? "on" : "off");
+    setSoundEnabledState(nextValue);
+    persistSound(nextValue);
     if (nextValue) playNotificationTone();
   };
 
