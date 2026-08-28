@@ -1,4 +1,4 @@
-import { useEffect, useState, createContext, useContext } from "react";
+import { useEffect, useRef, useState, createContext, useContext } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/types";
 import type { Session, User } from "@supabase/supabase-js";
@@ -31,6 +31,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [impersonatedProfile, setImpersonatedProfile] = useState<Profile | null>(null);
   const [accessIssue, setAccessIssue] = useState<AuthContextType["accessIssue"]>(null);
   const [loading, setLoading] = useState(true);
+  // Which user the profile in state belongs to. Supabase re-emits auth events
+  // on tab focus and on every token refresh; without this guard each one would
+  // flip `loading` back on, unmount the whole app and wipe the screen the user
+  // was working on (search, filters, the open record).
+  const loadedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -43,7 +48,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setAccessIssue(null);
     };
 
-    const loadProfile = async (userId: string, requestId: number) => {
+    const loadProfile = async (userId: string, requestId: number): Promise<boolean> => {
       try {
         const { data, error } = await supabase
           .from("profiles")
@@ -51,30 +56,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           .eq("id", userId)
           .maybeSingle();
 
-        if (!active || requestId !== authRequestId) return;
+        if (!active || requestId !== authRequestId) return false;
 
         if (error) {
           console.error("Error fetching profile:", error);
           setOriginalProfile(null);
           setAccessIssue("profile_load_failed");
-          return;
+          return false;
         }
 
         if (!data) {
           setOriginalProfile(null);
           setAccessIssue("profile_not_found");
-          return;
+          return false;
         }
 
         const nextProfile = data as Profile;
         setOriginalProfile(nextProfile);
         setAccessIssue(nextProfile.active ? null : "inactive");
         if (!nextProfile.active) setImpersonatedProfile(null);
+        return true;
       } catch (err) {
-        if (!active || requestId !== authRequestId) return;
+        if (!active || requestId !== authRequestId) return false;
         console.error("Error fetching profile:", err);
         setOriginalProfile(null);
         setAccessIssue("profile_load_failed");
+        return false;
       }
     };
 
@@ -83,15 +90,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (!session?.user) {
         if (!active) return;
+        loadedUserIdRef.current = null;
         clearAuthState();
         setLoading(false);
         return;
       }
 
       if (!active) return;
+
+      // Token refresh or tab focus for the session already loaded: the client
+      // has the new token internally and nothing on screen needs to change.
+      if (loadedUserIdRef.current === session.user.id) return;
+
       setLoading(true);
       setUser(session.user);
-      await loadProfile(session.user.id, requestId);
+      loadedUserIdRef.current = session.user.id;
+      const loaded = await loadProfile(session.user.id, requestId);
+      if (!loaded) loadedUserIdRef.current = null;
 
       if (active && requestId === authRequestId) {
         setLoading(false);
