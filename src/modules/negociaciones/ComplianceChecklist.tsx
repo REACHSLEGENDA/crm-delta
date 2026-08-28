@@ -49,12 +49,20 @@ export const ComplianceChecklist = ({ leadId, canReview }: ComplianceChecklistPr
     if (leadId) void load();
   }, [leadId, load]);
 
-  const docFor = (type: string) => documents.find((item) => item.document_type === type);
+  const docsFor = (type: string) => documents.filter((item) => item.document_type === type);
+  // A requirement is satisfied as soon as one of its files is approved, which is
+  // the same rule the database enforces before allowing "Aprobado".
+  const isSatisfied = (type: string) => docsFor(type).some((item) => item.status === "aprobado");
 
   const upload = async (event: React.ChangeEvent<HTMLInputElement>, type: string) => {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (!file || !profile?.id) return;
+    if (files.length === 0 || !profile?.id) return;
+    for (const file of files) await uploadOne(file, type);
+  };
+
+  const uploadOne = async (file: File, type: string) => {
+    if (!profile?.id) return;
     setBusy(type);
     setError("");
     try {
@@ -63,22 +71,14 @@ export const ComplianceChecklist = ({ leadId, canReview }: ComplianceChecklistPr
       const { error: uploadError } = await supabase.storage.from("compliance_docs").upload(path, file);
       if (uploadError) throw uploadError;
 
-      const existing = docFor(type);
-      if (existing) {
-        await supabase
-          .from("compliance_documents")
-          .update({ file_path: path, file_name: file.name, status: "pendiente", reviewed_by: null, reviewed_at: null })
-          .eq("id", existing.id);
-      } else {
-        await supabase.from("compliance_documents").insert({
-          lead_id: leadId,
-          document_type: type,
-          file_path: path,
-          file_name: file.name,
-          uploaded_by: profile.id,
-          status: "pendiente",
-        });
-      }
+      await supabase.from("compliance_documents").insert({
+        lead_id: leadId,
+        document_type: type,
+        file_path: path,
+        file_name: file.name,
+        uploaded_by: profile.id,
+        status: "pendiente",
+      });
       await load();
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "No se pudo subir el archivo.");
@@ -103,7 +103,7 @@ export const ComplianceChecklist = ({ leadId, canReview }: ComplianceChecklistPr
     await load();
   };
 
-  const approved = required.filter((item) => docFor(item.document_type)?.status === "aprobado").length;
+  const approved = required.filter((item) => isSatisfied(item.document_type)).length;
   const complete = required.length > 0 && approved === required.length;
   const accentColor = complete ? "var(--success)" : "var(--warning)";
 
@@ -125,68 +125,85 @@ export const ComplianceChecklist = ({ leadId, canReview }: ComplianceChecklistPr
 
       <ul className="flex flex-col gap-2">
         {required.map((item) => {
-          const doc = docFor(item.document_type);
-          const status = (doc?.status as DocStatus | undefined) ?? "pendiente";
-          const meta = STATUS_META[status];
-          const isBusy = busy === item.document_type || (doc ? busy === doc.id : false);
+          const files = docsFor(item.document_type);
+          const satisfied = isSatisfied(item.document_type);
+          const isBusy = busy === item.document_type;
 
           return (
             <li key={item.document_type} className="rounded-lg border border-border bg-background p-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex min-w-0 items-start gap-2">
-                  {doc && status === "aprobado" && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: meta.color }} />}
-                  {doc && status === "rechazado" && <XCircle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: meta.color }} />}
-                  {doc && status === "pendiente" && <CircleDashed className="mt-0.5 h-4 w-4 shrink-0" style={{ color: meta.color }} />}
-                  {!doc && <CircleDashed className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />}
+                  {satisfied
+                    ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--success)" }} />
+                    : <CircleDashed className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />}
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-foreground">{item.label}</p>
-                    {doc ? (
-                      <button
-                        type="button"
-                        onClick={() => void openAttachment({ name: doc.file_name, path: doc.file_path })}
-                        className="mt-0.5 flex items-center gap-1 text-[11px] text-primary hover:underline"
-                      >
-                        <FileText className="h-3 w-3" /> <span className="truncate">{doc.file_name}</span>
-                      </button>
-                    ) : (
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">Sin archivo</p>
-                    )}
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {files.length === 0
+                        ? "Sin archivos"
+                        : `${files.length} archivo${files.length === 1 ? "" : "s"}`}
+                    </p>
                   </div>
                 </div>
-                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider" style={{ color: meta.color }}>
-                  {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : meta.label}
-                </span>
+                {isBusy && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />}
               </div>
 
+              {files.length > 0 && (
+                <ul className="mt-2 flex flex-col gap-1.5">
+                  {files.map((doc) => {
+                    const status = (doc.status as DocStatus | undefined) ?? "pendiente";
+                    const meta = STATUS_META[status];
+                    const fileBusy = busy === doc.id;
+                    return (
+                      <li key={doc.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-card px-2 py-1.5">
+                        <button
+                          type="button"
+                          onClick={() => void openAttachment({ name: doc.file_name, path: doc.file_path })}
+                          className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[11px] text-primary hover:underline"
+                          title={doc.file_name}
+                        >
+                          <FileText className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{doc.file_name}</span>
+                        </button>
+                        <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider" style={{ color: meta.color }}>
+                          {fileBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : meta.label}
+                        </span>
+                        {canReview && (
+                          <span className="flex shrink-0 gap-1">
+                            {status !== "aprobado" && (
+                              <button type="button" onClick={() => void review(doc.id, "aprobado")}
+                                className="rounded border border-success/35 px-1.5 py-0.5 text-[9px] font-bold text-success transition-colors hover:bg-success/10"
+                                title="Aprobar este archivo">
+                                <CheckCircle2 className="h-3 w-3" />
+                              </button>
+                            )}
+                            {status !== "rechazado" && (
+                              <button type="button" onClick={() => void review(doc.id, "rechazado")}
+                                className="rounded border border-destructive/35 px-1.5 py-0.5 text-[9px] font-bold text-destructive transition-colors hover:bg-destructive/10"
+                                title="Rechazar este archivo">
+                                <XCircle className="h-3 w-3" />
+                              </button>
+                            )}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
               {canReview && (
-                <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-border pt-2.5">
+                <div className="mt-2.5 border-t border-border pt-2.5">
                   <label className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-md border border-border px-2 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
-                    <UploadCloud className="h-3 w-3" /> {doc ? "Reemplazar" : "Subir"}
+                    <UploadCloud className="h-3 w-3" /> Agregar archivo
                     <input
                       type="file"
+                      multiple
                       className="sr-only"
                       accept="image/*,.pdf"
                       onChange={(event) => void upload(event, item.document_type)}
                     />
                   </label>
-                  {doc && status !== "aprobado" && (
-                    <button
-                      type="button"
-                      onClick={() => void review(doc.id, "aprobado")}
-                      className="inline-flex min-h-8 items-center gap-1 rounded-md border border-success/35 px-2 text-[10px] font-semibold text-success transition-colors hover:bg-success/10"
-                    >
-                      <CheckCircle2 className="h-3 w-3" /> Aprobar
-                    </button>
-                  )}
-                  {doc && status !== "rechazado" && (
-                    <button
-                      type="button"
-                      onClick={() => void review(doc.id, "rechazado")}
-                      className="inline-flex min-h-8 items-center gap-1 rounded-md border border-destructive/35 px-2 text-[10px] font-semibold text-destructive transition-colors hover:bg-destructive/10"
-                    >
-                      <XCircle className="h-3 w-3" /> Rechazar
-                    </button>
-                  )}
                 </div>
               )}
             </li>

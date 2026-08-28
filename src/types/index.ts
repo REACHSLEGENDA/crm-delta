@@ -3,9 +3,10 @@ export type Department = 'Ventas' | 'Retencion' | 'Cumplimiento';
 export type LeadStatus = 'Nuevo' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido' | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
 export type SalesStage = 'Nuevo lead' | 'Contactado' | 'Interesado' | 'Asesoría' | 'Depósito pendiente' | 'Ganado' | 'Perdido';
 export type ComplianceStage = 'KYC pendiente' | 'Documentos en revisión' | 'Contrato pendiente' | 'Aprobado' | 'Rechazado';
+export type RecoveryStage = 'REC1 Asignado' | 'REC2 Contactado' | 'REC3 En negociación' | 'REC4 Re-depósito' | 'REC5 Recuperado' | 'REC6 No recuperado';
 export type RetentionStage = 'R1 Bienvenida' | 'R2 Perfil de riesgo' | 'R3 Primera estrategia' | 'R4 Seguimiento inicial' | 'R5 Re-depósito' | 'R6 Consolidación' | 'R7 Fidelización';
 
-export type DealStage = SalesStage | ComplianceStage | RetentionStage | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
+export type DealStage = SalesStage | ComplianceStage | RetentionStage | RecoveryStage | 'Lead nuevo con comentarios' | 'Venta 1' | 'Venta 2' | 'Venta 3' | 'Venta 4' | 'Venta 5' | 'Venta 6' | 'Venta 7';
 
 export type DealPipeline = 'Ventas' | 'Cumplimiento' | 'Retencion';
 export type CallDisposition = 'Interesado' | 'No interesado' | 'Buzón' | 'Número inexistente' | 'Callback' | 'Depósito confirmado' | 'No contestó';
@@ -239,5 +240,6 @@ export interface Notification {
   title: string;
   content: string;
   read: boolean;
+  metadata?: Record<string, unknown>;
   created_at: string;
 }

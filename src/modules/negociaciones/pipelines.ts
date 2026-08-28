@@ -40,6 +40,22 @@ export const RETENTION_STAGES = [
   "R7 Fidelización",
 ] as const satisfies readonly DealStage[];
 
+/**
+ * Recovery is a second track inside the Retencion pipeline: same team and
+ * permissions, different stages. The board switches between the two.
+ */
+export const RECOVERY_STAGES = [
+  "REC1 Asignado",
+  "REC2 Contactado",
+  "REC3 En negociación",
+  "REC4 Re-depósito",
+  "REC5 Recuperado",
+  "REC6 No recuperado",
+] as const satisfies readonly DealStage[];
+
+export const isRecoveryStage = (stage: string): boolean =>
+  (RECOVERY_STAGES as readonly string[]).includes(stage);
+
 export const PIPELINE_CONFIG: Record<DealPipeline, PipelineConfig> = {
   Ventas: {
     label: "Ventas",
@@ -102,6 +118,15 @@ const COMPLIANCE_META: Record<string, StageMeta> = {
   Rechazado: { shortLabel: "Rechazado", color: "var(--stage-lost)" },
 };
 
+const RECOVERY_META: Record<string, StageMeta> = {
+  "REC1 Asignado": { shortLabel: "1 · Asignado", color: "var(--stage-new)" },
+  "REC2 Contactado": { shortLabel: "2 · Contactado", color: "var(--stage-contacted)" },
+  "REC3 En negociación": { shortLabel: "3 · Negociación", color: "var(--stage-interested)" },
+  "REC4 Re-depósito": { shortLabel: "4 · Re-depósito", color: "var(--stage-deposit)" },
+  "REC5 Recuperado": { shortLabel: "5 · Recuperado", color: "var(--stage-won)" },
+  "REC6 No recuperado": { shortLabel: "6 · No recuperado", color: "var(--stage-lost)" },
+};
+
 const RETENTION_META: Record<string, StageMeta> = {
   "R1 Bienvenida": { shortLabel: "1 · Bienvenida", color: "var(--stage-new)" },
   "R2 Perfil de riesgo": { shortLabel: "2 · Perfil", color: "var(--stage-contacted)" },
@@ -116,6 +141,7 @@ const ALL_STAGE_META: Record<string, StageMeta> = {
   ...SALES_META,
   ...COMPLIANCE_META,
   ...RETENTION_META,
+  ...RECOVERY_META,
 };
 
 export const stageMeta = (stage: string): StageMeta =>

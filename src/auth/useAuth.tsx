@@ -86,22 +86,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const applySession = async (session: Session | null) => {
-      const requestId = ++authRequestId;
+      if (!active) return;
 
       if (!session?.user) {
-        if (!active) return;
         loadedUserIdRef.current = null;
+        authRequestId += 1;
         clearAuthState();
         setLoading(false);
         return;
       }
 
-      if (!active) return;
-
       // Token refresh or tab focus for the session already loaded: the client
       // has the new token internally and nothing on screen needs to change.
+      // This check must happen BEFORE bumping authRequestId -- Supabase emits
+      // getSession() and onAuthStateChange almost together at start-up, and
+      // invalidating the in-flight request here would leave `loading` stuck on
+      // forever, showing an endless spinner.
       if (loadedUserIdRef.current === session.user.id) return;
 
+      const requestId = ++authRequestId;
       setLoading(true);
       setUser(session.user);
       loadedUserIdRef.current = session.user.id;

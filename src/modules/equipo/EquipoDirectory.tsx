@@ -55,7 +55,7 @@ const fullName = (profile?: Profile) =>
 
 export const EquipoDirectory = () => {
   const { profile: currentProfile } = useAuth();
-  const { isSuperAdmin, isManager, isAuditMode } = usePermissions();
+  const { isSuperAdmin, isManager, auditBlocked, isRealSuperAdmin } = usePermissions();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +69,7 @@ export const EquipoDirectory = () => {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const canConfigure = !isAuditMode && (isSuperAdmin || isManager);
+  const canConfigure = !auditBlocked && (isSuperAdmin || isManager || isRealSuperAdmin);
 
   const fetchDirectory = useCallback(async () => {
     setLoading(true);

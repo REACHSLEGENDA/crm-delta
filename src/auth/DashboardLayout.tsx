@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useLocation } from "react-router";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/admin/app-sidebar";
+import { usePermissions } from "@/hooks/usePermissions";
+import { ChatDock } from "@/modules/chat/ChatDock";
 import { useAuth } from "@/auth/useAuth";
 import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/types";
@@ -30,6 +32,24 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
   const [selectedId, setSelectedId] = useState("");
 
   const canAudit = originalProfile?.role === "SUPERADMIN" || originalProfile?.role === "MANAGER" || originalProfile?.role === "SUPERVISOR";
+  const { auditBlocked } = usePermissions();
+
+  // Radix locks the page with `pointer-events: none` on <body> while a dialog or
+  // sheet is open and releases it on close. Switching perspective unmounts those
+  // panels abruptly, so the lock can survive with nothing left to close and the
+  // whole app stops responding to clicks. Release it whenever no Radix overlay
+  // is actually mounted.
+  useEffect(() => {
+    const release = () => {
+      const hasOverlay = document.querySelector("[data-radix-popper-content-wrapper], [role='dialog'][data-state='open']");
+      if (!hasOverlay && document.body.style.pointerEvents === "none") {
+        document.body.style.removeProperty("pointer-events");
+      }
+    };
+    release();
+    const timer = window.setInterval(release, 700);
+    return () => window.clearInterval(timer);
+  }, []);
   const isImpersonating = Boolean(originalProfile && profile && originalProfile.id !== profile.id);
   const pageLabel = PAGE_LABELS[location.pathname] ?? { title: "Delta Capital", area: "CRM" };
 
@@ -101,7 +121,7 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
               <div className="flex items-center gap-2">
                 <UserCheck className="h-4 w-4" />
                 <span>
-                  Vista simulada de solo lectura: perspectiva de{" "}
+                  {auditBlocked ? "Vista simulada de solo lectura" : "Vista simulada con edición"}: perspectiva de{" "}
                   <strong>
                     {profile?.first_name} {profile?.last_name}
                   </strong>{" "}
@@ -158,14 +178,15 @@ export const DashboardLayout = ({ children }: { children: React.ReactNode }) => 
           {/* Main content */}
           <main id="main-content" className="flex-1 overflow-auto" tabIndex={-1}>
             <div
-              className={isImpersonating ? "pointer-events-none opacity-[0.96]" : undefined}
-              aria-disabled={isImpersonating || undefined}
+              className={auditBlocked ? "pointer-events-none opacity-[0.96]" : undefined}
+              aria-disabled={auditBlocked || undefined}
             >
               {children}
             </div>
           </main>
         </div>
       </div>
+      {!location.pathname.startsWith("/chat") && <ChatDock />}
     </SidebarProvider>
   );
 };

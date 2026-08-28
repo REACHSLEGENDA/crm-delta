@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { CalendarDays, Columns3, DollarSign, FilterX, List, ListChecks, Plus, Search, TrendingUp, Trophy, XCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
@@ -10,7 +11,7 @@ import { ActivitiesView, CalendarView, DealsListView, KanbanView } from "./Pipel
 import { DealWorkspaceSheet, type ActivityDraft } from "./DealWorkspaceSheet";
 import { CloseDealDialog, DealFormDialog, PostponeDialog, type DealFormPayload } from "./DealDialogs";
 import { ACTIVE_STAGES, CONTACT_OUTCOME_CONFIG, formatCurrency, type PipelineStage } from "./pipeline";
-import { PIPELINE_CONFIG, stagesForPipeline, visiblePipelines, type DealPipeline } from "./pipelines";
+import { PIPELINE_CONFIG, RECOVERY_STAGES, isRecoveryStage, stagesForPipeline, visiblePipelines, type DealPipeline } from "./pipelines";
 
 type ViewMode = "kanban" | "list" | "activities" | "calendar";
 interface ConfirmTarget { type: "deal" | "activity"; id: string; name: string; }
@@ -32,6 +33,12 @@ const safeViewMode = (value: string | null): ViewMode => VIEW_OPTIONS.some((item
 const PAGE_SIZE = 1000;
 const MAX_PAGES = 8;
 
+// Only the columns the board actually renders. `select *` also pulls
+// leads.raw_data -- the whole imported CSV row kept as jsonb -- which is
+// megabytes across thousands of prospects and is never displayed.
+const LEAD_COLUMNS = "id,first_name,last_name,email,phone,status,source,country,investment_capacity,comments,agent_id,team_id,is_burned,contact_outcome,created_at,updated_at";
+const DEAL_COLUMNS = "id,name,value,stage,pipeline,lead_id,agent_id,sales_agent_id,team_id,currency,expected_closing_date,closed_at,close_reason,loss_reason,created_at,updated_at";
+
 type PagedQuery = { range: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }> };
 
 const fetchAllRows = async <T,>(buildQuery: () => PagedQuery): Promise<{ data: T[]; error: { message: string } | null }> => {
@@ -49,7 +56,8 @@ const fetchAllRows = async <T,>(buildQuery: () => PagedQuery): Promise<{ data: T
 
 export const NegociacionesKanban = () => {
   const { profile } = useAuth();
-  const { isAgent, isSupervisor, isManager, isSuperAdmin, isAuditMode, canDelete, isCompliance } = usePermissions();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { isAgent, isSupervisor, isManager, isSuperAdmin, isAuditMode, auditBlocked, isRealSuperAdmin, canDelete, isCompliance } = usePermissions();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -60,6 +68,8 @@ export const NegociacionesKanban = () => {
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>(() => safeViewMode(localStorage.getItem(VIEW_KEY)));
   const [pipeline, setPipeline] = useState<DealPipeline>("Ventas");
+  // Retencion carries two tracks: the normal lifecycle and Recovery.
+  const [recoveryTrack, setRecoveryTrack] = useState(false);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
@@ -75,7 +85,7 @@ export const NegociacionesKanban = () => {
   const [postponingActivity, setPostponingActivity] = useState<Activity | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
   const [resetTarget, setResetTarget] = useState<Deal | null>(null);
-  const canMutate = !isAuditMode && !isCompliance;
+  const canMutate = !auditBlocked && (!isCompliance || isRealSuperAdmin);
 
   const availablePipelines = useMemo(
     () => visiblePipelines(profile?.role, profile?.department),
@@ -90,20 +100,45 @@ export const NegociacionesKanban = () => {
 
   useEffect(() => { localStorage.setItem(PIPELINE_KEY, pipeline); }, [pipeline]);
 
-  const pipelineStages = useMemo(() => stagesForPipeline(pipeline) as readonly PipelineStage[], [pipeline]);
+  // Arriving from Prospectos with ?deal=<id>: switch to that record's pipeline
+  // and open its workspace, so both screens lead to the same detailed view.
+  useEffect(() => {
+    const requested = searchParams.get("deal");
+    if (!requested || deals.length === 0) return;
+    const target = deals.find((item) => item.id === requested);
+    if (!target) return;
+    setPipeline((target.pipeline ?? "Ventas") as DealPipeline);
+    if (target.pipeline === "Retencion") setRecoveryTrack(isRecoveryStage(target.stage));
+    setSelectedDealId(target.id);
+    setWorkspaceOpen(true);
+    void (async () => {
+      const { data } = await supabase.from("notes").select("*").eq("deal_id", target.id).order("created_at", { ascending: false });
+      setNotes((data ?? []) as Note[]);
+    })();
+    searchParams.delete("deal");
+    setSearchParams(searchParams, { replace: true });
+  }, [deals, searchParams, setSearchParams]);
+
+  const pipelineStages = useMemo(
+    () =>
+      (pipeline === "Retencion" && recoveryTrack
+        ? RECOVERY_STAGES
+        : stagesForPipeline(pipeline)) as readonly PipelineStage[],
+    [pipeline, recoveryTrack],
+  );
 
   const fetchData = useCallback(async (showLoader = true) => {
     if (!profile) return;
     if (showLoader) setLoading(true);
     setError("");
     const buildDealsQuery = () => {
-      let query = supabase.from("deals").select("*").order("updated_at", { ascending: false });
+      let query = supabase.from("deals").select(DEAL_COLUMNS).order("updated_at", { ascending: false });
       if (profile.role === "AGENT") query = query.eq("agent_id", profile.id);
       else if (isAuditMode && profile.role === "SUPERVISOR" && profile.team_id) query = query.eq("team_id", profile.team_id);
       return query;
     };
     const buildLeadsQuery = () => {
-      let query = supabase.from("leads").select("*").order("created_at", { ascending: false });
+      let query = supabase.from("leads").select(LEAD_COLUMNS).order("created_at", { ascending: false });
       if (profile.role === "AGENT") query = query.eq("agent_id", profile.id);
       else if (isAuditMode && profile.role === "SUPERVISOR" && profile.team_id) query = query.eq("team_id", profile.team_id);
       return query;
@@ -117,7 +152,7 @@ export const NegociacionesKanban = () => {
       fetchAllRows<Deal>(buildDealsQuery),
       fetchAllRows<Lead>(buildLeadsQuery),
       activitiesQuery,
-      supabase.from("profiles").select("*").eq("active", true).order("first_name"),
+      supabase.from("profiles").select("id,first_name,last_name,email,role,department,team_id,active").eq("active", true).order("first_name"),
     ]);
     const firstError = dealResult.error || leadResult.error || activityResult.error || profileResult.error;
     if (firstError) setError(firstError.message || "No se pudo cargar el pipeline.");
@@ -146,8 +181,14 @@ export const NegociacionesKanban = () => {
   const activeLeads = useMemo(() => leads.filter((lead) => !lead.is_burned), [leads]);
   const burnedLeadIds = useMemo(() => new Set(leads.filter((lead) => lead.is_burned).map((lead) => lead.id)), [leads]);
   const activeDeals = useMemo(
-    () => deals.filter((deal) => (deal.pipeline ?? "Ventas") === pipeline && (!deal.lead_id || !burnedLeadIds.has(deal.lead_id))),
-    [burnedLeadIds, deals, pipeline],
+    () =>
+      deals.filter((deal) => {
+        if ((deal.pipeline ?? "Ventas") !== pipeline) return false;
+        if (deal.lead_id && burnedLeadIds.has(deal.lead_id)) return false;
+        if (pipeline === "Retencion") return isRecoveryStage(deal.stage) === recoveryTrack;
+        return true;
+      }),
+    [burnedLeadIds, deals, pipeline, recoveryTrack],
   );
   const eligibleAgents = useMemo(() => agents.filter((agent) => {
     if (agent.role !== "AGENT") return false;
@@ -422,6 +463,27 @@ export const NegociacionesKanban = () => {
         {canMutate && <button type="button" onClick={() => openCreateDeal()} className="gold-button-primary inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold"><Plus className="h-4 w-4" /> Nueva negociación</button>}
       </header>
       {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive"><span>{error}</span><button type="button" onClick={() => setError("")} className="font-semibold underline">Cerrar</button></div>}
+
+      {pipeline === "Retencion" && (
+        <div role="tablist" aria-label="Pista de Retención" className="inline-flex gap-1 rounded-xl border border-border bg-card p-1">
+          {[
+            { value: false, label: "Ciclo normal", hint: "Etapas 1 a 7" },
+            { value: true, label: "Recovery", hint: "Reactivación de cuentas" },
+          ].map((option) => (
+            <button
+              key={option.label}
+              type="button"
+              role="tab"
+              aria-selected={recoveryTrack === option.value}
+              onClick={() => { setRecoveryTrack(option.value); setStageFilter(""); }}
+              className={`min-h-10 rounded-lg px-3 text-left transition-colors ${recoveryTrack === option.value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+              title={option.hint}
+            >
+              <span className="block text-xs font-bold">{option.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {availablePipelines.length > 1 && (
         <div role="tablist" aria-label="Embudo" className="inline-flex flex-wrap gap-1 rounded-2xl border border-border bg-card p-1">

@@ -10,9 +10,9 @@ import {
   Plus,
   Send,
   Smile,
+  Copy,
   Sticker,
   Trash2,
-  UserRound,
   X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -43,6 +43,39 @@ const isEmojiOnly = (text: string) => {
   return /\p{Extended_Pictographic}/u.test(trimmed);
 };
 
+
+/** Initials + a stable colour per person, so senders are told apart at a glance. */
+const AVATAR_COLORS = ["#d4af37", "#00c9ff", "#22c55e", "#a78bfa", "#f59e0b", "#ef4444", "#38bdf8", "#f97316"];
+
+const initialsOf = (profile?: Pick<Profile, "first_name" | "last_name" | "email">) => {
+  if (!profile) return "?";
+  const first = profile.first_name?.[0] ?? "";
+  const last = profile.last_name?.[0] ?? "";
+  return (first + last).toUpperCase() || (profile.email?.[0] ?? "?").toUpperCase();
+};
+
+const colorFor = (key: string) => {
+  let hash = 0;
+  for (let index = 0; index < key.length; index++) hash = (hash * 31 + key.charCodeAt(index)) % 997;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+};
+
+const DAY_LABEL = (value: string) => {
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "Hoy";
+  if (date.toDateString() === yesterday.toDateString()) return "Ayer";
+  return date.toLocaleDateString("es-MX", { day: "numeric", month: "long", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" });
+};
+
+const clockOf = (value: string) =>
+  new Date(value).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+
+/** Consecutive messages from the same person within 5 minutes read as one block. */
+const GROUP_WINDOW_MS = 5 * 60 * 1000;
+
 const AttachmentPreview = ({ attachment }: { attachment: FileAttachment }) => {
   const [url, setUrl] = useState(attachment.url ?? "");
   useEffect(() => {
@@ -69,8 +102,8 @@ const AttachmentPreview = ({ attachment }: { attachment: FileAttachment }) => {
 
 export const ChatInterno = () => {
   const { profile } = useAuth();
-  const { isSuperAdmin, isManager, isAuditMode } = usePermissions();
-  const canManagePublicChannels = !isAuditMode && (isSuperAdmin || isManager);
+  const { isSuperAdmin, isManager, auditBlocked, isRealSuperAdmin } = usePermissions();
+  const canManagePublicChannels = !auditBlocked && (isSuperAdmin || isManager || isRealSuperAdmin);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -158,7 +191,7 @@ export const ChatInterno = () => {
 
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!profile?.id || !selectedChannel || isAuditMode || sending) return;
+    if (!profile?.id || !selectedChannel || auditBlocked || sending) return;
     const content = inputMessage.trim();
     const externalGif = gifUrl.trim();
     if (!content && pendingFiles.length === 0 && !externalGif) return;
@@ -196,7 +229,7 @@ export const ChatInterno = () => {
   };
 
   const sendSticker = async (emoji: string) => {
-    if (!profile?.id || !selectedChannel || isAuditMode || sending) return;
+    if (!profile?.id || !selectedChannel || auditBlocked || sending) return;
     setShowStickers(false);
     setSending(true); setError("");
     const tempId = crypto.randomUUID();
@@ -245,9 +278,28 @@ export const ChatInterno = () => {
           <div className="flex-1 space-y-1 overflow-y-auto p-2">
             {channels.map((channel) => (
               <div key={channel.id} className="group relative">
-                <button type="button" onClick={() => { setSelectedChannel(channel); setMobileChannelsOpen(false); }} className={`flex min-h-12 w-full items-center gap-3 rounded-lg px-3 pr-11 text-left transition-colors ${selectedChannel?.id === channel.id ? "bg-primary/12 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}>
-                  {channel.type === "privado" ? <Lock className="h-4 w-4 shrink-0" /> : <Hash className="h-4 w-4 shrink-0" />}
-                  <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{channel.name}</span><span className="block text-[10px] uppercase tracking-wide opacity-70">{channel.type === "privado" ? "Privado" : channel.type}</span></span>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedChannel(channel); setMobileChannelsOpen(false); }}
+                  className={`flex min-h-14 w-full items-center gap-3 rounded-xl px-3 pr-11 text-left transition-colors ${selectedChannel?.id === channel.id ? "bg-primary/12 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+                >
+                  <span
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[11px] font-bold"
+                    style={{
+                      background: `color-mix(in srgb, ${colorFor(channel.id)} 18%, transparent)`,
+                      color: colorFor(channel.id),
+                    }}
+                  >
+                    {channel.type === "privado" ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{channel.name}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      {(channel.members?.length ?? 0) > 0
+                        ? `${channel.members?.length} participante${channel.members?.length === 1 ? "" : "s"}`
+                        : channel.type === "privado" ? "Privado" : channel.type}
+                    </span>
+                  </span>
                 </button>
                 {canDeleteChannel(channel) && <button type="button" onClick={() => setConfirmChannel(channel)} className="app-icon-button absolute right-1.5 top-1.5 h-9 w-9 opacity-100 hover:bg-destructive/10 hover:text-destructive lg:opacity-0 lg:group-hover:opacity-100" aria-label={`Eliminar ${channel.name}`}><Trash2 className="h-3.5 w-3.5" /></button>}
               </div>
@@ -264,32 +316,107 @@ export const ChatInterno = () => {
 
           {selectedChannel ? (
             <>
-              <div className="flex-1 space-y-4 overflow-y-auto p-3 sm:p-5">
-                {messages.map((message) => {
+              <div className="flex-1 overflow-y-auto p-3 sm:p-5">
+                {messages.map((message, index) => {
                   const own = message.user_id === profile?.id;
+                  const previous = index > 0 ? messages[index - 1] : undefined;
                   const sticker = isEmojiOnly(message.content ?? "") && (!message.attachments || message.attachments.length === 0);
+
+                  const newDay = !previous || DAY_LABEL(previous.created_at) !== DAY_LABEL(message.created_at);
+                  const grouped =
+                    !newDay &&
+                    previous?.user_id === message.user_id &&
+                    new Date(message.created_at).getTime() - new Date(previous.created_at).getTime() < GROUP_WINDOW_MS;
+
+                  const senderName = fullName(message.profiles);
+                  const accent = colorFor(message.user_id ?? senderName);
+
                   return (
-                    <article key={message.id} className={`flex max-w-[92%] items-start gap-2.5 sm:max-w-[78%] ${own ? "ml-auto flex-row-reverse" : ""}`}>
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary"><UserRound className="h-4 w-4" /></span>
-                      <div className={`min-w-0 ${own ? "text-right" : ""}`}>
-                        <p className="mb-1 text-[10px] text-muted-foreground"><span className="font-semibold">{fullName(message.profiles)}</span> · {new Date(message.created_at).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</p>
-                        {sticker ? (
-                          <p className={`text-[2.75rem] leading-none ${own ? "text-right" : ""}`}>{message.content}</p>
+                    <div key={message.id}>
+                      {newDay && (
+                        <div className="my-4 flex items-center gap-3">
+                          <span className="h-px flex-1 bg-border" />
+                          <span className="rounded-full border border-border bg-card px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            {DAY_LABEL(message.created_at)}
+                          </span>
+                          <span className="h-px flex-1 bg-border" />
+                        </div>
+                      )}
+
+                      <article
+                        className={`group/msg flex max-w-[92%] select-text items-end gap-2 sm:max-w-[76%] ${grouped ? "mt-0.5" : "mt-3"} ${own ? "ml-auto flex-row-reverse" : ""}`}
+                      >
+                        {grouped ? (
+                          <span className="w-8 shrink-0" aria-hidden="true" />
                         ) : (
-                          <div className={`rounded-xl px-3 py-2 text-left text-sm leading-relaxed ${own ? "rounded-tr-sm bg-primary text-primary-foreground" : "rounded-tl-sm border border-border bg-card text-foreground"}`}>
-                            {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
-                            {message.attachments && message.attachments.length > 0 && <div className={`grid gap-2 ${message.content ? "mt-2" : ""}`}>{message.attachments.map((attachment) => <AttachmentPreview key={`${attachment.path}-${attachment.url ?? ""}`} attachment={attachment} />)}</div>}
-                          </div>
+                          <span
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-bold"
+                            style={{ background: `color-mix(in srgb, ${accent} 20%, transparent)`, color: accent }}
+                            title={senderName}
+                          >
+                            {initialsOf(message.profiles)}
+                          </span>
                         )}
-                      </div>
-                    </article>
+
+                        <div className={`min-w-0 ${own ? "items-end" : "items-start"} flex flex-col`}>
+                          {!grouped && !own && (
+                            <span className="mb-1 px-1 text-[11px] font-bold" style={{ color: accent }}>
+                              {senderName}
+                            </span>
+                          )}
+
+                          {sticker ? (
+                            <p className="px-1 text-[3rem] leading-none">{message.content}</p>
+                          ) : (
+                            <div
+                              className={`relative px-3 py-2 text-left text-sm leading-relaxed shadow-sm ${
+                                own
+                                  ? `bg-primary text-primary-foreground ${grouped ? "rounded-2xl rounded-br-md" : "rounded-2xl rounded-br-sm"}`
+                                  : `border border-border bg-card text-foreground ${grouped ? "rounded-2xl rounded-bl-md" : "rounded-2xl rounded-bl-sm"}`
+                              }`}
+                            >
+                              {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
+                              {message.attachments && message.attachments.length > 0 && (
+                                <div className={`grid gap-2 ${message.content ? "mt-2" : ""}`}>
+                                  {message.attachments.map((attachment) => (
+                                    <AttachmentPreview key={`${attachment.path}-${attachment.url ?? ""}`} attachment={attachment} />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <span className={`mt-0.5 flex items-center gap-2 px-1 ${own ? "flex-row-reverse" : ""}`}>
+                            <span className="text-[10px] tabular-nums text-muted-foreground">{clockOf(message.created_at)}</span>
+                            {message.content && !sticker && (
+                              <button
+                                type="button"
+                                onClick={() => void navigator.clipboard.writeText(message.content).catch(() => undefined)}
+                                className="inline-flex items-center gap-1 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/msg:opacity-100 focus-visible:opacity-100"
+                                title="Copiar mensaje"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </button>
+                            )}
+                          </span>
+                        </div>
+                      </article>
+                    </div>
                   );
                 })}
-                {messages.length === 0 && <div className="grid h-full min-h-64 place-items-center text-center"><div><MessageSquare className="mx-auto mb-3 h-9 w-9 text-primary/45" /><p className="font-semibold text-foreground">Inicia la conversación</p><p className="text-sm text-muted-foreground">Comparte una actualización o adjunta un archivo.</p></div></div>}
+                {messages.length === 0 && (
+                  <div className="grid h-full min-h-64 place-items-center text-center">
+                    <div>
+                      <MessageSquare className="mx-auto mb-3 h-9 w-9 text-primary/45" />
+                      <p className="font-semibold text-foreground">Inicia la conversación</p>
+                      <p className="text-sm text-muted-foreground">Comparte una actualización o adjunta un archivo.</p>
+                    </div>
+                  </div>
+                )}
                 <div ref={messagesEndRef} />
               </div>
 
-              {!isAuditMode && <form onSubmit={sendMessage} className="relative border-t border-border bg-card p-3 sm:p-4">
+              {!auditBlocked && <form onSubmit={sendMessage} className="relative border-t border-border bg-card p-3 sm:p-4">
                 {pendingFiles.length > 0 && <div className="mb-2 flex flex-wrap gap-2">{pendingFiles.map((file, index) => <span key={`${file.name}-${index}`} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-muted px-2.5 text-xs"><Paperclip className="h-3.5 w-3.5 text-primary" /><span className="max-w-40 truncate">{file.name}</span><button type="button" onClick={() => setPendingFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Quitar ${file.name}`}><X className="h-3.5 w-3.5" /></button></span>)}</div>}
                 {showGifInput && <div className="mb-2 flex gap-2"><input value={gifUrl} onChange={(event) => setGifUrl(event.target.value)} placeholder="Pega una URL https:// de GIF" className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /><button type="button" onClick={() => { setShowGifInput(false); setGifUrl(""); }} className="app-icon-button" aria-label="Quitar GIF"><X className="h-4 w-4" /></button></div>}
                 {showEmojiPicker && (

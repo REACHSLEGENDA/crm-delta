@@ -10,13 +10,16 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { useNavigate } from "react-router";
 import { ComplianceDocs } from "./ComplianceDocs";
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 500, 1000];
 
+const LEAD_STAGES = ["Nuevo", "Contactado", "Interesado", "Asesoría", "Depósito pendiente", "Ganado", "Perdido"] as const;
+
 export const ProspectosList = () => {
   const { profile } = useAuth();
-  const { isAgent, isSupervisor, isManager, isSuperAdmin, canDelete, isRetention, isCompliance, canViewAll, canAssignLeads, isAuditMode } = usePermissions();
+  const { isAgent, isSupervisor, isManager, isSuperAdmin, canDelete, isRetention, isCompliance, canViewAll, canAssignLeads, isAuditMode, auditBlocked, isRealSuperAdmin } = usePermissions();
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [agents, setAgents] = useState<Profile[]>([]);
@@ -73,9 +76,14 @@ export const ProspectosList = () => {
     try {
       setLoading(true);
       setLoadError("");
+      // Excludes raw_data: the imported CSV row is stored per lead as jsonb and
+      // is never shown here, but it dominates the response size.
       let query = supabase
         .from("leads")
-        .select("*", { count: "exact" })
+        .select(
+          "id,first_name,last_name,email,phone,status,source,country,investment_capacity,comments,campaign_name,registered_at,agent_id,team_id,created_by,is_burned,contact_outcome,created_at,updated_at",
+          { count: "exact" },
+        )
         .eq("is_burned", false)
         .order("created_at", { ascending: false });
 
@@ -191,9 +199,86 @@ export const ProspectosList = () => {
       .eq("lead_id", lead.id)
       .order("created_at", { ascending: false });
     if (noteData) setNotes(noteData as Note[]);
+
+    // The full negotiation workspace is the richer view; offer it when the
+    // prospect already has a deal behind it.
+    const { data: dealRow } = await supabase
+      .from("deals")
+      .select("id")
+      .eq("lead_id", lead.id)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setLinkedDealId((dealRow as { id?: string } | null)?.id ?? null);
   };
 
   // Add Note
+  // The prospect drawer now mirrors the deal workspace: stage, typification and
+  // scheduled follow-up are all editable without leaving the record.
+  const [savingDetail, setSavingDetail] = useState(false);
+  const [activityTitle, setActivityTitle] = useState("Comunicarse con el cliente");
+  const [activityDue, setActivityDue] = useState("");
+
+  const patchSelectedLead = async (patch: Partial<Lead>) => {
+    if (!selectedLead) return;
+    setSavingDetail(true);
+    const { data, error } = await supabase
+      .from("leads")
+      .update(patch)
+      .eq("id", selectedLead.id)
+      .select()
+      .single();
+    setSavingDetail(false);
+    if (error) { setLoadError(error.message); return; }
+    const updated = data as Lead;
+    setSelectedLead(updated);
+    setLeads((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+  };
+
+  const [recoveryAgent, setRecoveryAgent] = useState("");
+  const [linkedDealId, setLinkedDealId] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  // Recovery is assigned deliberately by administration, naming the retention
+  // agent who will try to win the account back.
+  const sendToRecovery = async () => {
+    if (!selectedLead || !recoveryAgent) return;
+    setSavingDetail(true);
+    const { error } = await supabase.rpc("send_lead_to_recovery", {
+      target_lead_id: selectedLead.id,
+      target_agent_id: recoveryAgent,
+    });
+    setSavingDetail(false);
+    if (error) { setLoadError(error.message); return; }
+    setRecoveryAgent("");
+    setLoadError("");
+  };
+
+  const scheduleFollowUp = async () => {
+    if (!selectedLead || !profile?.id || !activityTitle.trim() || !activityDue) return;
+    setSavingDetail(true);
+    const dueDate = new Date(activityDue);
+    const { error } = await supabase.from("activities").insert({
+      lead_id: selectedLead.id,
+      user_id: profile.id,
+      title: activityTitle.trim(),
+      description: activityTitle.trim(),
+      type: "task",
+      due_at: dueDate.toISOString(),
+      reminder_at: new Date(dueDate.getTime() - 15 * 60 * 1000).toISOString(),
+      status: "pending",
+    });
+    setSavingDetail(false);
+    if (error) { setLoadError(error.message); return; }
+    setActivityDue("");
+    const { data: refreshed } = await supabase
+      .from("activities")
+      .select("*")
+      .eq("lead_id", selectedLead.id)
+      .order("created_at", { ascending: false });
+    if (refreshed) setActivities(refreshed as Activity[]);
+  };
+
   const handleAddNote = async () => {
     if (!newNote.trim() || !selectedLead || !profile) return;
     try {
@@ -833,116 +918,224 @@ export const ProspectosList = () => {
 
       {/* Drawer Details Lateral */}
       {isDrawerOpen && selectedLead && (
-        <div
-          className="fixed inset-0 z-50 flex justify-end backdrop-blur-sm"
-          style={{ background: "var(--overlay)" }}
-        >
-          <div className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-border bg-background p-6">
-            <div className="space-y-5">
-              {/* Top Drawer Header */}
-              <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
-                <div className="min-w-0">
-                  <h3 className="truncate font-title text-xl font-bold text-foreground">
-                    {selectedLead.first_name} {selectedLead.last_name}
-                  </h3>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground font-mono-numbers">
-                    ID: {selectedLead.id.slice(0, 8)}
-                  </span>
-                </div>
-                <button
-                  onClick={() => setIsDrawerOpen(false)}
-                  className="app-icon-button"
-                  aria-label="Cerrar detalle del prospecto"
-                >
+        <div className="fixed inset-0 z-50 flex justify-end backdrop-blur-sm" style={{ background: "var(--overlay)" }}>
+          <div className="flex h-full w-full flex-col overflow-hidden border-l border-border bg-background sm:max-w-[94vw] xl:max-w-[1180px]">
+
+            {/* Header */}
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-card px-5 py-4">
+              <div className="min-w-0">
+                <h3 className="truncate font-title text-xl font-bold text-foreground">
+                  {selectedLead.first_name} {selectedLead.last_name}
+                </h3>
+                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                  <span className="font-mono-numbers text-[11px] uppercase tracking-wider">ID: {selectedLead.id.slice(0, 8)}</span>
+                  {selectedLead.phone && <span>{selectedLead.phone}</span>}
+                  {agents.find((agent) => agent.id === selectedLead.agent_id) && (
+                    <span>
+                      Responsable: {agents.find((agent) => agent.id === selectedLead.agent_id)?.first_name}{" "}
+                      {agents.find((agent) => agent.id === selectedLead.agent_id)?.last_name}
+                    </span>
+                  )}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {linkedDealId && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/negociaciones?deal=${linkedDealId}`)}
+                    className="gold-button-secondary min-h-9 rounded-lg px-3 text-xs font-bold"
+                  >
+                    Abrir negociación
+                  </button>
+                )}
+                <button onClick={() => setIsDrawerOpen(false)} className="app-icon-button" aria-label="Cerrar detalle del prospecto">
                   <X className="h-5 w-5" />
                 </button>
               </div>
+            </div>
 
-              {/* Contact Information */}
-              <section className="surface-card space-y-4 p-5">
-                <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                  Información de contacto
-                </h4>
-                <div className="space-y-4">
-                  <LeadInfoRow icon={Mail} label="Email" value={selectedLead.email || "Sin email"} />
-                  <LeadInfoRow icon={Phone} label="Teléfono" value={selectedLead.phone || "Sin teléfono"} />
-                  <LeadInfoRow icon={Globe} label="País" value={selectedLead.country || "País no especificado"} />
-                  <LeadInfoRow icon={TrendingUp} label="Capacidad de inversión" value={selectedLead.investment_capacity || "Capacidad no indicada"} />
-                  <LeadInfoRow icon={Tag} label="Fuente" value={selectedLead.source || "Sin fuente"} />
-                  <LeadInfoRow icon={CheckCircle2} label="Estado" value={selectedLead.status} />
-                  {selectedLead.campaign_name && (
-                    <LeadInfoRow icon={Megaphone} label="Campaña" value={selectedLead.campaign_name} />
-                  )}
-                  <LeadInfoRow
-                    icon={Calendar}
-                    label="Registro"
-                    value={new Date(selectedLead.registered_at || selectedLead.created_at).toLocaleDateString("es-MX")}
-                  />
-                  {selectedLead.comments && (
-                    <LeadInfoRow icon={MessageSquare} label="Comentarios" value={selectedLead.comments} />
-                  )}
-                </div>
-              </section>
+            {/* Stage stepper */}
+            <div className="border-b border-border bg-card px-4 py-3">
+              <div className="grid grid-cols-2 gap-1 sm:grid-cols-4 xl:grid-cols-7" aria-label="Etapa del prospecto">
+                {LEAD_STAGES.map((stage, index) => {
+                  const active = selectedLead.status === stage;
+                  const reached =
+                    LEAD_STAGES.indexOf(selectedLead.status as (typeof LEAD_STAGES)[number]) >= index &&
+                    selectedLead.status !== "Perdido";
+                  return (
+                    <button
+                      key={stage}
+                      type="button"
+                      disabled={savingDetail || auditBlocked}
+                      onClick={() => void patchSelectedLead({ status: stage })}
+                      aria-current={active ? "step" : undefined}
+                      className={`min-h-11 rounded-md border px-2 py-2 text-left text-[11px] font-semibold transition-colors disabled:opacity-50 ${active ? "border-primary bg-primary/12 text-primary" : reached ? "border-border bg-muted/40 text-foreground" : "border-border bg-muted/25 text-muted-foreground hover:bg-muted"}`}
+                    >
+                      <span className="block text-[9px] font-medium uppercase opacity-70">Paso {index + 1}</span>
+                      <span className="block truncate">{stage}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-              {/* Notes Feed */}
-              <section className="surface-card space-y-4 p-5">
-                <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">Notas Comerciales</h4>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Agregar nota de la sesión..."
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    className="h-10 flex-1 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                  <button
-                    onClick={handleAddNote}
-                    className="gold-button-primary rounded-lg px-4 text-sm font-semibold"
-                  >
-                    Guardar
-                  </button>
-                </div>
+            {/* Two columns, matching the negotiation workspace */}
+            <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(280px,0.82fr)_minmax(430px,1.35fr)] lg:overflow-hidden">
 
-                <div className="max-h-40 space-y-2 overflow-y-auto">
-                  {notes.length === 0 ? (
-                    <p className="pt-4 text-center text-xs text-muted-foreground">No hay notas registradas para este lead.</p>
-                  ) : (
-                    notes.map((note) => (
-                      <div key={note.id} className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
-                        <p className="whitespace-pre-wrap text-foreground">{note.content}</p>
-                        <span className="mt-1 block text-[11px] text-muted-foreground font-mono-numbers">{new Date(note.created_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </section>
-
-              {/* Activity Logs */}
-              <section className="surface-card space-y-4 p-5">
-                <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Historial de Actividades</h4>
-                <div className="max-h-40 space-y-3 overflow-y-auto">
-                  {activities.length === 0 ? (
-                    <p className="pt-2 text-center text-xs text-muted-foreground">Sin actividad registrada.</p>
-                  ) : (
-                    activities.map((act) => (
-                      <div key={act.id} className="flex items-start gap-3 text-sm">
-                        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
-                        <div className="min-w-0">
-                          <p className="text-foreground">{act.description}</p>
-                          <span className="text-[11px] text-muted-foreground font-mono-numbers">{new Date(act.created_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </section>
-
-              {/* Compliance Docs Section (Only for Cumplimiento) */}
-              {isCompliance && selectedLead && (
-                <section className="surface-card space-y-3 p-5">
-                  <ComplianceDocs leadId={selectedLead.id} />
+              <aside className="space-y-4 border-b border-border p-4 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+                <section className="surface-card space-y-4 p-5">
+                  <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Información de contacto</h4>
+                  <div className="space-y-4">
+                    <LeadInfoRow icon={Mail} label="Email" value={selectedLead.email || "Sin email"} />
+                    <LeadInfoRow icon={Phone} label="Teléfono" value={selectedLead.phone || "Sin teléfono"} />
+                    <LeadInfoRow icon={Globe} label="País" value={selectedLead.country || "País no especificado"} />
+                    <LeadInfoRow icon={TrendingUp} label="Capacidad de inversión" value={selectedLead.investment_capacity || "Capacidad no indicada"} />
+                    <LeadInfoRow icon={Tag} label="Fuente" value={selectedLead.source || "Sin fuente"} />
+                    {selectedLead.campaign_name && <LeadInfoRow icon={Megaphone} label="Campaña" value={selectedLead.campaign_name} />}
+                    <LeadInfoRow
+                      icon={Calendar}
+                      label="Registro"
+                      value={new Date(selectedLead.registered_at || selectedLead.created_at).toLocaleDateString("es-MX")}
+                    />
+                    {selectedLead.comments && <LeadInfoRow icon={MessageSquare} label="Comentarios" value={selectedLead.comments} />}
+                  </div>
                 </section>
-              )}
+
+                <section className="surface-card p-5">
+                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Tipificación</h4>
+                  <select
+                    value={selectedLead.contact_outcome ?? "pending"}
+                    disabled={savingDetail || auditBlocked}
+                    onChange={(event) => void patchSelectedLead({ contact_outcome: event.target.value as Lead["contact_outcome"] })}
+                    className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  >
+                    <option value="pending">Sin clasificar</option>
+                    <option value="valid">Número válido</option>
+                    <option value="no_answer">No contestó</option>
+                    <option value="direct_voicemail">Buzón directo</option>
+                    <option value="invalid_number">Número inexistente</option>
+                  </select>
+                </section>
+
+                {(isSuperAdmin || isManager) && !auditBlocked && (
+                  <section className="surface-card p-5">
+                    <h4 className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Enviar a Recovery</h4>
+                    <p className="mb-3 text-[11px] text-muted-foreground">Manda la cuenta al proceso de recuperación con un agente de Retención.</p>
+                    <select
+                      value={recoveryAgent}
+                      onChange={(event) => setRecoveryAgent(event.target.value)}
+                      className="mb-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="">Selecciona un agente de Retención…</option>
+                      {agents
+                        .filter((agent) => agent.department === "Retencion" && agent.active)
+                        .map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.first_name} {agent.last_name} · {agent.role}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void sendToRecovery()}
+                      disabled={savingDetail || !recoveryAgent}
+                      className="gold-button-secondary min-h-10 w-full rounded-xl text-sm font-bold disabled:opacity-50"
+                    >
+                      Enviar a Recovery
+                    </button>
+                  </section>
+                )}
+
+                {isCompliance && (
+                  <section className="surface-card space-y-3 p-5">
+                    <ComplianceDocs leadId={selectedLead.id} />
+                  </section>
+                )}
+              </aside>
+
+              <div className="space-y-4 p-4 lg:overflow-y-auto">
+                {!auditBlocked && (
+                  <section className="surface-card p-5">
+                    <h4 className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Programar seguimiento</h4>
+                    <input
+                      value={activityTitle}
+                      onChange={(event) => setActivityTitle(event.target.value)}
+                      placeholder="¿Qué hay que hacer?"
+                      className="mb-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        type="datetime-local"
+                        value={activityDue}
+                        onChange={(event) => setActivityDue(event.target.value)}
+                        className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void scheduleFollowUp()}
+                        disabled={savingDetail || !activityDue || !activityTitle.trim()}
+                        className="gold-button-primary min-h-11 rounded-xl px-4 text-sm font-bold disabled:opacity-50"
+                      >
+                        Agendar
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground">Se te avisa 15 minutos antes.</p>
+                  </section>
+                )}
+
+                <section className="surface-card space-y-4 p-5">
+                  <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Comentario</h4>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Agregar nota de la sesión…"
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      className="h-11 flex-1 rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                    <button onClick={handleAddNote} className="gold-button-primary rounded-xl px-4 text-sm font-semibold">
+                      Guardar
+                    </button>
+                  </div>
+                </section>
+
+                <section className="surface-card p-5">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="h-px flex-1 bg-border" />
+                    <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Historial</h4>
+                    <span className="h-px flex-1 bg-border" />
+                  </div>
+                  <div className="space-y-3">
+                    {[
+                      ...notes.map((note) => ({ kind: "note" as const, date: note.created_at, text: note.content })),
+                      ...activities.map((act) => ({ kind: "activity" as const, date: act.created_at, text: act.description })),
+                    ]
+                      .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+                      .map((entry, index) => (
+                        <div key={`${entry.kind}-${index}`} className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
+                          <span
+                            className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg"
+                            style={{
+                              background: `color-mix(in srgb, var(${entry.kind === "note" ? "--primary" : "--electric"}) 12%, transparent)`,
+                              color: `var(${entry.kind === "note" ? "--primary" : "--electric"})`,
+                            }}
+                          >
+                            {entry.kind === "note" ? <MessageSquare className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="whitespace-pre-wrap text-sm text-foreground">{entry.text}</p>
+                            <span className="mt-0.5 block font-mono-numbers text-[11px] text-muted-foreground">
+                              {new Date(entry.date).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    {notes.length === 0 && activities.length === 0 && (
+                      <p className="py-6 text-center text-xs text-muted-foreground">Sin actividad registrada.</p>
+                    )}
+                  </div>
+                </section>
+              </div>
             </div>
           </div>
         </div>
@@ -966,7 +1159,7 @@ export const ProspectosList = () => {
                 <input
                   type="text"
                   required
-                  disabled={isRetention || isCompliance || isAuditMode}
+                  disabled={auditBlocked || ((isRetention || isCompliance) && !isRealSuperAdmin)}
                   value={formData.first_name}
                   onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -977,7 +1170,7 @@ export const ProspectosList = () => {
                 <input
                   type="text"
                   required
-                  disabled={isRetention || isCompliance || isAuditMode}
+                  disabled={auditBlocked || ((isRetention || isCompliance) && !isRealSuperAdmin)}
                   value={formData.last_name}
                   onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -991,7 +1184,7 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Email</label>
                 <input
                   type="email"
-                  disabled={isRetention || isCompliance || isAuditMode}
+                  disabled={auditBlocked || ((isRetention || isCompliance) && !isRealSuperAdmin)}
                   value={formData.email || ""}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -1001,7 +1194,7 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Teléfono</label>
                 <input
                   type="text"
-                  disabled={isRetention || isCompliance || isAuditMode}
+                  disabled={auditBlocked || ((isRetention || isCompliance) && !isRealSuperAdmin)}
                   value={formData.phone || ""}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -1016,7 +1209,7 @@ export const ProspectosList = () => {
                 <input
                   type="text"
                   placeholder="Ej. México"
-                  disabled={isRetention || isCompliance || isAuditMode}
+                  disabled={auditBlocked || ((isRetention || isCompliance) && !isRealSuperAdmin)}
                   value={formData.country || ""}
                   onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] disabled:opacity-50"
@@ -1026,7 +1219,7 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Capacidad de Inversión</label>
                 <select
                   value={formData.investment_capacity || ""}
-                  disabled={isRetention || isCompliance || isAuditMode}
+                  disabled={auditBlocked || ((isRetention || isCompliance) && !isRealSuperAdmin)}
                   onChange={(e) => setFormData({ ...formData, investment_capacity: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8] disabled:opacity-50"
                 >
@@ -1094,7 +1287,7 @@ export const ProspectosList = () => {
                 <label className="block text-xs text-[#94A3B8] mb-1">Fuente</label>
                 <select
                   value={formData.source}
-                  disabled={isRetention || isCompliance || isAuditMode}
+                  disabled={auditBlocked || ((isRetention || isCompliance) && !isRealSuperAdmin)}
                   onChange={(e) => setFormData({ ...formData, source: e.target.value })}
                   className="px-3 py-2 w-full text-sm bg-[#050814] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8] disabled:opacity-50"
                 >

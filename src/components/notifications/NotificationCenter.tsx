@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Bell, BellRing, CheckCheck, Volume2, VolumeX } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { supabase } from "@/lib/supabase";
@@ -11,11 +12,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SOUND_KEY, playMessageTone, playNotificationTone, setSoundEnabled as persistSound } from "@/lib/sound";
+import { SOUND_KEY, playAssignmentTone, playMessageTone, playNotificationTone, setSoundEnabled as persistSound } from "@/lib/sound";
 
 export const NotificationCenter = () => {
   const { profile } = useAuth();
   const [notifications, setNotifications] = useState<CRMNotification[]>([]);
+  const [toast, setToast] = useState<CRMNotification | null>(null);
   const [soundEnabled, setSoundEnabledState] = useState(
     () => localStorage.getItem(SOUND_KEY) !== "off",
   );
@@ -53,7 +55,15 @@ export const NotificationCenter = () => {
         (payload) => {
           const notification = payload.new as CRMNotification;
           setNotifications((current) => [notification, ...current].slice(0, 20));
-          if (soundEnabled) playNotificationTone();
+          const isAssignment = (notification.metadata as { kind?: string } | undefined)?.kind === "lead_assignment";
+          if (soundEnabled) {
+            if (isAssignment) playAssignmentTone();
+            else playNotificationTone();
+          }
+          // An on-screen card, so the alert is not missed when the browser has
+          // no notification permission or the tab is already focused.
+          setToast(notification);
+          window.setTimeout(() => setToast((current) => (current?.id === notification.id ? null : current)), 8000);
           if ("Notification" in window && Notification.permission === "granted") {
             new Notification(notification.title, { body: notification.content, icon: "/logo.png" });
           }
@@ -121,7 +131,29 @@ export const NotificationCenter = () => {
     if (nextValue) playNotificationTone();
   };
 
+  const toastCard = toast
+    ? createPortal(
+        <div className="fixed bottom-5 right-5 z-[9998] w-[min(22rem,90vw)] animate-in rounded-xl border border-primary/30 bg-popover p-4 shadow-2xl duration-300 slide-in-from-bottom-4">
+          <div className="flex items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary">
+              <BellRing className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-foreground">{toast.title}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{toast.content}</p>
+            </div>
+            <button type="button" onClick={() => setToast(null)} className="shrink-0 text-muted-foreground hover:text-foreground" aria-label="Cerrar aviso">
+              <CheckCheck className="h-4 w-4" />
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )
+    : null;
+
   return (
+    <>
+    {toastCard}
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button type="button" className="app-icon-button relative" aria-label="Abrir notificaciones">
@@ -183,5 +215,6 @@ export const NotificationCenter = () => {
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+    </>
   );
 };
