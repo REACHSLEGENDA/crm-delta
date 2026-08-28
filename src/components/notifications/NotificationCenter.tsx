@@ -12,15 +12,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SOUND_KEY, playAssignmentTone, playMessageTone, playNotificationTone, setSoundEnabled as persistSound } from "@/lib/sound";
+import { isSoundEnabled, playAssignmentTone, playMessageTone, playNotificationTone, setSoundEnabled as persistSound } from "@/lib/sound";
 
 export const NotificationCenter = () => {
   const { profile } = useAuth();
   const [notifications, setNotifications] = useState<CRMNotification[]>([]);
   const [toast, setToast] = useState<CRMNotification | null>(null);
-  const [soundEnabled, setSoundEnabledState] = useState(
-    () => localStorage.getItem(SOUND_KEY) !== "off",
-  );
+  const [soundEnabled, setSoundEnabledState] = useState(isSoundEnabled);
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !notification.read).length,
