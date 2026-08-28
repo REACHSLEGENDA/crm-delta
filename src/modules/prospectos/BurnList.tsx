@@ -3,6 +3,7 @@ import { ArchiveX, History, Mail, Phone, Search, ShieldCheck, UserRound } from "
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { absoluteTime, relativeTime } from "@/lib/relativeTime";
 import type { Lead, Profile } from "@/types";
 
 interface AssignmentRow {
@@ -187,9 +188,14 @@ export const BurnList = () => {
                       {OUTCOME_LABELS[lead.contact_outcome ?? "pending"]}
                     </p>
                   </div>
-                  <time className="text-xs text-muted-foreground" dateTime={lead.burned_at ?? lead.updated_at}>
-                    {new Date(lead.burned_at ?? lead.updated_at).toLocaleDateString("es-MX")}
-                  </time>
+                  <div className="text-right">
+                    <time className="block text-xs text-muted-foreground" dateTime={lead.burned_at ?? lead.updated_at}>
+                      {new Date(lead.burned_at ?? lead.updated_at).toLocaleDateString("es-MX")}
+                    </time>
+                    <span className="mt-0.5 block text-[11px] text-muted-foreground" title={absoluteTime(lead.updated_at)}>
+                      Actualizado {relativeTime(lead.updated_at)}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="mt-4 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
