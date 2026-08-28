@@ -2,7 +2,7 @@ import { useCallback, useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { absoluteTime, relativeTime } from "@/lib/relativeTime";
+import { absoluteTime, clockTime, relativeTime } from "@/lib/relativeTime";
 import type { Contact, Note, Call, Deal } from "@/types";
 import {
   Plus, Search, Phone, Mail, Landmark, X,
@@ -238,7 +238,7 @@ export const ContactosList = () => {
                 )}
                 <div className="flex items-center gap-2" title={absoluteTime(contact.updated_at)}>
                   <Clock className="h-3.5 w-3.5 shrink-0 text-primary/70" />
-                  <span>Actualizado {relativeTime(contact.updated_at)}</span>
+                  <span>Actualizado {relativeTime(contact.updated_at)} · {clockTime(contact.updated_at)}</span>
                 </div>
               </div>
             </div>

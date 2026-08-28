@@ -2,7 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { absoluteTime, relativeTime } from "@/lib/relativeTime";
+import { absoluteTime, clockTime, relativeTime } from "@/lib/relativeTime";
 import type { Lead, Profile, Note, Activity } from "@/types";
 import {
   Search, Plus, Tag, Trash2,
@@ -801,7 +801,7 @@ export const ProspectosList = () => {
                           {lead.contact_outcome === "invalid_number" ? "Número inexistente" : lead.contact_outcome === "direct_voicemail" ? "Buzón directo" : lead.contact_outcome === "no_answer" ? "No contestó" : lead.contact_outcome === "valid" ? "Número válido" : "Sin clasificar"}
                         </span>
                         <span className="rounded-full bg-muted px-2 py-1" title={absoluteTime(lead.updated_at)}>
-                          Actualizado {relativeTime(lead.updated_at)}
+                          Actualizado {relativeTime(lead.updated_at)} · {clockTime(lead.updated_at)}
                         </span>
                       </div>
                       <div className="mt-3 flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
@@ -884,7 +884,8 @@ export const ProspectosList = () => {
                       </span>
                     </td>
                     <td className="p-4 whitespace-nowrap text-xs text-[#94A3B8]" title={absoluteTime(lead.updated_at)}>
-                      {relativeTime(lead.updated_at)}
+                      <span className="block">{relativeTime(lead.updated_at)}</span>
+                      <span className="block text-[10px] opacity-70">{clockTime(lead.updated_at)}</span>
                     </td>
                     <td className="p-4 text-right flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                       <button

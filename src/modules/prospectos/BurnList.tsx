@@ -3,7 +3,7 @@ import { ArchiveX, History, Mail, Phone, Search, ShieldCheck, UserRound } from "
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { absoluteTime, relativeTime } from "@/lib/relativeTime";
+import { absoluteTime, clockTime, relativeTime } from "@/lib/relativeTime";
 import type { Lead, Profile } from "@/types";
 
 interface AssignmentRow {
@@ -193,7 +193,7 @@ export const BurnList = () => {
                       {new Date(lead.burned_at ?? lead.updated_at).toLocaleDateString("es-MX")}
                     </time>
                     <span className="mt-0.5 block text-[11px] text-muted-foreground" title={absoluteTime(lead.updated_at)}>
-                      Actualizado {relativeTime(lead.updated_at)}
+                      Actualizado {relativeTime(lead.updated_at)} · {clockTime(lead.updated_at)}
                     </span>
                   </div>
                 </div>

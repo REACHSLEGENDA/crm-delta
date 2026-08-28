@@ -34,3 +34,20 @@ export const absoluteTime = (value?: string | null): string => {
   const timestamp = new Date(value);
   return Number.isNaN(timestamp.getTime()) ? "" : timestamp.toLocaleString("es-MX");
 };
+
+/**
+ * Clock time to show under the relative label. Days-old rows all read the same
+ * ("hace 2d"), so the hour is what tells two of them apart at a glance.
+ */
+export const clockTime = (value?: string | null): string => {
+  if (!value) return "";
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return "";
+
+  const sameDay = timestamp.toDateString() === new Date().toDateString();
+  const clock = timestamp.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+
+  return sameDay
+    ? clock
+    : `${timestamp.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit" })} ${clock}`;
+};
