@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Hash, Lock, MessageSquare, Minus, Send, X } from "lucide-react";
+import { ArrowLeft, FileText, Hash, Lock, MessageSquare, Minus, Paperclip, Send, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { Channel, Message, Profile } from "@/types";
+import { getAttachmentUrl, openAttachment, removeAttachment, uploadAttachment } from "@/lib/attachments";
+import type { Channel, FileAttachment, Message, Profile } from "@/types";
 
 const SEEN_KEY = "delta-capital-chat-seen";
 const AVATAR_COLORS = ["#d4af37", "#00c9ff", "#22c55e", "#a78bfa", "#f59e0b", "#ef4444", "#38bdf8", "#f97316"];
@@ -34,6 +35,37 @@ const readSeen = (): Record<string, string> => {
   }
 };
 
+const DockAttachment = ({ attachment }: { attachment: FileAttachment }) => {
+  const [url, setUrl] = useState(attachment.url ?? "");
+  useEffect(() => {
+    let active = true;
+    if (!attachment.url && attachment.type?.startsWith("image/")) {
+      void getAttachmentUrl(attachment)
+        .then((signed) => { if (active) setUrl(signed); })
+        .catch(() => undefined);
+    }
+    return () => { active = false; };
+  }, [attachment]);
+
+  if (url && (attachment.type?.startsWith("image/") || attachment.url)) {
+    return (
+      <button type="button" onClick={() => void openAttachment(attachment)} className="block overflow-hidden rounded-lg border border-border">
+        <img src={url} alt={attachment.name} className="max-h-40 w-full object-contain" loading="lazy" />
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void openAttachment(attachment)}
+      className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-muted/50 px-2 py-1 text-[11px] text-foreground hover:border-primary/40"
+    >
+      <FileText className="h-3 w-3 shrink-0 text-primary" />
+      <span className="truncate">{attachment.name}</span>
+    </button>
+  );
+};
+
 /**
  * Floating chat available on every screen, so a conversation never requires
  * leaving the record being worked on. It shares the same channels and messages
@@ -49,6 +81,7 @@ export const ChatDock = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [unread, setUnread] = useState<Record<string, number>>({});
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -162,26 +195,41 @@ export const ChatDock = () => {
   const send = async (event: React.FormEvent) => {
     event.preventDefault();
     const content = draft.trim();
-    if (!content || !active || !profile?.id || sending || auditBlocked) return;
+    if ((!content && pendingFiles.length === 0) || !active || !profile?.id || sending || auditBlocked) return;
     setSending(true);
+
+    const uploaded: FileAttachment[] = [];
+    try {
+      for (const file of pendingFiles) uploaded.push(await uploadAttachment(file, profile.id, `chat/${active.id}`));
+    } catch {
+      // Roll back whatever made it up, so no orphan files stay in storage.
+      await Promise.allSettled(uploaded.map(removeAttachment));
+      setSending(false);
+      return;
+    }
+
     const optimistic: Message = {
       id: crypto.randomUUID(),
       channel_id: active.id,
       user_id: profile.id,
-      content,
-      attachments: [],
+      content: content || "Archivo adjunto",
+      attachments: uploaded,
       created_at: new Date().toISOString(),
       profiles: profile,
     };
     setMessages((current) => [...current, optimistic]);
     setDraft("");
+    setPendingFiles([]);
     window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
 
     const { error } = await supabase
       .from("messages")
-      .insert({ channel_id: active.id, user_id: profile.id, content, attachments: [] });
+      .insert({ channel_id: active.id, user_id: profile.id, content: optimistic.content, attachments: uploaded });
     setSending(false);
-    if (error) setMessages((current) => current.filter((item) => item.id !== optimistic.id));
+    if (error) {
+      await Promise.allSettled(uploaded.map(removeAttachment));
+      setMessages((current) => current.filter((item) => item.id !== optimistic.id));
+    }
   };
 
   if (!profile) return null;
@@ -316,6 +364,13 @@ export const ChatDock = () => {
                           }`}
                         >
                           <span className="whitespace-pre-wrap break-words">{message.content}</span>
+                          {message.attachments && message.attachments.length > 0 && (
+                            <span className="mt-1.5 grid gap-1.5">
+                              {message.attachments.map((attachment) => (
+                                <DockAttachment key={`${attachment.path}-${attachment.url ?? ""}`} attachment={attachment} />
+                              ))}
+                            </span>
+                          )}
                         </span>
                         <span className={`mt-0.5 px-1 text-[9px] tabular-nums text-muted-foreground ${own ? "text-right" : ""}`}>
                           {clockOf(message.created_at)}
@@ -331,7 +386,38 @@ export const ChatDock = () => {
               </div>
 
               {!auditBlocked && (
-                <form onSubmit={send} className="flex items-end gap-2 border-t border-border bg-card p-2">
+                <form onSubmit={send} className="border-t border-border bg-card p-2">
+                  {pendingFiles.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {pendingFiles.map((file, index) => (
+                        <span key={`${file.name}-${index}`} className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted px-2 py-1 text-[10px]">
+                          <Paperclip className="h-3 w-3 text-primary" />
+                          <span className="max-w-28 truncate">{file.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setPendingFiles((current) => current.filter((_, i) => i !== index))}
+                            aria-label={`Quitar ${file.name}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-end gap-2">
+                  <label className="app-icon-button h-10 w-10 shrink-0 cursor-pointer" aria-label="Adjuntar archivo">
+                    <Paperclip className="h-4 w-4" />
+                    <input
+                      type="file"
+                      multiple
+                      className="sr-only"
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                      onChange={(event) => {
+                        setPendingFiles((current) => [...current, ...Array.from(event.target.files ?? [])]);
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
                   <textarea
                     rows={1}
                     value={draft}
@@ -347,12 +433,13 @@ export const ChatDock = () => {
                   />
                   <button
                     type="submit"
-                    disabled={sending || !draft.trim()}
+                    disabled={sending || (!draft.trim() && pendingFiles.length === 0)}
                     className="gold-button-primary grid h-10 w-10 shrink-0 place-items-center rounded-xl disabled:opacity-45"
                     aria-label="Enviar"
                   >
                     <Send className="h-4 w-4" />
                   </button>
+                  </div>
                 </form>
               )}
             </>
