@@ -911,7 +911,8 @@ export const ProspectosList = () => {
             </table>
 
             {/* ✅ NUEVO: Footer con paginación y selector de tamaño */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-card px-4 py-3">
+            {/* Extra right padding keeps the pager clear of the floating chat dock. */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-card px-4 py-3 pr-20 sm:pr-24">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-[#4A6080]">Mostrar</span>
                 <select
