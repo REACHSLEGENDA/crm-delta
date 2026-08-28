@@ -18,6 +18,14 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 500, 1000];
 
 const LEAD_STAGES = ["Nuevo", "Contactado", "Interesado", "Asesoría", "Depósito pendiente", "Ganado", "Perdido"] as const;
 
+type SortOption = "created_desc" | "updated_desc" | "updated_asc";
+
+const SORT_CONFIG: Record<SortOption, { label: string; column: string; ascending: boolean }> = {
+  created_desc: { label: "Más recientes primero", column: "created_at", ascending: false },
+  updated_desc: { label: "Actividad más reciente", column: "updated_at", ascending: false },
+  updated_asc: { label: "Sin actividad hace más tiempo", column: "updated_at", ascending: true },
+};
+
 export const ProspectosList = () => {
   const { profile } = useAuth();
   const { isAgent, isSupervisor, isManager, isSuperAdmin, canDelete, isRetention, isCompliance, canViewAll, canAssignLeads, isAuditMode, auditBlocked, isRealSuperAdmin } = usePermissions();
@@ -35,6 +43,7 @@ export const ProspectosList = () => {
   const [filterAgent, setFilterAgent] = useState(isAuditMode ? profile?.id || "" : "");
   const [filterCountry, setFilterCountry] = useState("");
   const [filterContactOutcome, setFilterContactOutcome] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("created_desc");
   const deferredSearch = useDeferredValue(search.trim());
 
   // ✅ NUEVO: Paginación
@@ -86,7 +95,7 @@ export const ProspectosList = () => {
           { count: "exact" },
         )
         .eq("is_burned", false)
-        .order("created_at", { ascending: false });
+        .order(SORT_CONFIG[sortBy].column, { ascending: SORT_CONFIG[sortBy].ascending });
 
       if (canViewAll) {
         // Managers y Superadmins ven todos los leads
@@ -143,6 +152,7 @@ export const ProspectosList = () => {
     isAgent,
     pageSize,
     profile,
+    sortBy,
   ]);
 
   const fetchAgents = useCallback(async () => {
@@ -518,7 +528,7 @@ export const ProspectosList = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="grid grid-cols-1 gap-3 p-4 glass-card md:grid-cols-2 xl:grid-cols-7">
+      <div className="grid grid-cols-1 gap-3 p-4 glass-card md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#64748B]" />
           <input 
@@ -598,7 +608,19 @@ export const ProspectosList = () => {
             ))}
           </select>
         </div>
-        <button 
+        <div>
+          <select
+            value={sortBy}
+            onChange={(e) => { setSortBy(e.target.value as SortOption); setCurrentPage(1); }}
+            aria-label="Ordenar prospectos"
+            className="px-3 py-2 w-full text-sm bg-[#0D1428] border border-[rgba(212,175,55,0.15)] rounded focus:outline-none focus:border-[#D4AF37] text-[#94A3B8]"
+          >
+            {(Object.keys(SORT_CONFIG) as SortOption[]).map((option) => (
+              <option key={option} value={option}>{SORT_CONFIG[option].label}</option>
+            ))}
+          </select>
+        </div>
+        <button
           onClick={() => {
             setSearch("");
             setFilterStatus("");
@@ -606,6 +628,7 @@ export const ProspectosList = () => {
             setFilterSource("");
             setFilterAgent("");
             setFilterContactOutcome("");
+            setSortBy("created_desc");
             setCurrentPage(1);
             setSelectedIds(new Set());
           }}
