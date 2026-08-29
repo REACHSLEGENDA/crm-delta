@@ -236,8 +236,8 @@ export const EquipoDirectory = () => {
             ) : (
               <div className="grid gap-4 xl:grid-cols-2">
                 {visibleTeams.map((team) => {
-                  const leader = team.leader_id ? profileMap.get(team.leader_id) : undefined;
-                  const members = profiles.filter((person) => person.team_id === team.id && person.id !== team.leader_id);
+                  const leaders = profiles.filter((person) => person.team_id === team.id && (person.id === team.leader_id || person.role === "SUPERVISOR" || person.role === "MANAGER"));
+                  const members = profiles.filter((person) => person.team_id === team.id && !leaders.find(l => l.id === person.id));
                   return (
                     <article key={team.id} className="app-panel overflow-hidden">
                       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4 sm:p-5">
@@ -246,7 +246,7 @@ export const EquipoDirectory = () => {
                             <h3 className="font-semibold text-foreground">{team.name}</h3>
                             {!team.active && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">Inactivo</span>}
                           </div>
-                          <p className="mt-1 text-xs text-muted-foreground">{team.department ? DEPARTMENT_LABELS[team.department] : "Sin departamento"} · {members.length} colaboradores</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{team.department ? DEPARTMENT_LABELS[team.department] : "Sin departamento"} · {members.length + leaders.length} colaboradores</p>
                         </div>
                         {canConfigure && (
                           <button type="button" onClick={() => openEditTeam(team)} className="app-icon-button h-11 w-11" aria-label={`Editar ${team.name}`}>
@@ -255,15 +255,19 @@ export const EquipoDirectory = () => {
                         )}
                       </div>
                       <div className="p-4 sm:p-5">
-                        <button type="button" onClick={() => leader && setSelectedProfile(leader)} className="flex min-h-14 w-full items-center gap-3 rounded-xl border border-primary/25 bg-primary/10 p-3 text-left hover:bg-primary/15">
-                          <span className="grid h-10 w-10 place-items-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-                            {leader?.first_name?.[0] ?? "?"}{leader?.last_name?.[0] ?? ""}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary"><Crown className="h-3.5 w-3.5" /> Líder</span>
-                            <span className="block truncate text-sm font-semibold text-foreground">{fullName(leader)}</span>
-                          </span>
-                        </button>
+                        <div className="grid gap-2 mb-3">
+                          {leaders.map(leader => (
+                            <button key={leader.id} type="button" onClick={() => setSelectedProfile(leader)} className="flex min-h-14 w-full items-center gap-3 rounded-xl border border-primary/25 bg-primary/10 p-3 text-left hover:bg-primary/15">
+                              <span className="grid h-10 w-10 place-items-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                                {leader?.first_name?.[0] ?? "?"}{leader?.last_name?.[0] ?? ""}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary"><Crown className="h-3.5 w-3.5" /> Líder</span>
+                                <span className="block truncate text-sm font-semibold text-foreground">{fullName(leader)}</span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
                         <div className="mt-3 flex flex-wrap gap-2">
                           {members.length === 0 ? (
                             <span className="text-xs text-muted-foreground">Sin agentes asignados.</span>
