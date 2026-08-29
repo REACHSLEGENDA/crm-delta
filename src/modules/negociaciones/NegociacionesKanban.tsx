@@ -57,7 +57,7 @@ const fetchAllRows = async <T,>(buildQuery: () => PagedQuery): Promise<{ data: T
 export const NegociacionesKanban = () => {
   const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isAgent, isSupervisor, isManager, isSuperAdmin, isAuditMode, auditBlocked, isRealSuperAdmin, canDelete, isCompliance } = usePermissions();
+  const { isAgent, isSupervisor, isManager, isSuperAdmin, isAuditMode, auditBlocked, isRealSuperAdmin, canDelete, isCompliance, canViewAll } = usePermissions();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -72,7 +72,7 @@ export const NegociacionesKanban = () => {
   const [recoveryTrack, setRecoveryTrack] = useState(false);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("");
-  const [agentFilter, setAgentFilter] = useState("");
+  const [agentFilter, setAgentFilter] = useState(isAuditMode ? profile?.id || "" : "");
   const [dragOverStage, setDragOverStage] = useState<PipelineStage | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
@@ -133,20 +133,24 @@ export const NegociacionesKanban = () => {
     setError("");
     const buildDealsQuery = () => {
       let query = supabase.from("deals").select(DEAL_COLUMNS).order("updated_at", { ascending: false });
-      if (profile.role === "AGENT") query = query.eq("agent_id", profile.id);
-      else if (isAuditMode && profile.role === "SUPERVISOR" && profile.team_id) query = query.eq("team_id", profile.team_id);
+      if (!canViewAll) {
+        if (profile.role === "AGENT") query = query.eq("agent_id", profile.id);
+        else if (isAuditMode && profile.role === "SUPERVISOR" && profile.team_id) query = query.eq("team_id", profile.team_id);
+      }
       return query;
     };
     const buildLeadsQuery = () => {
       let query = supabase.from("leads").select(LEAD_COLUMNS).order("created_at", { ascending: false });
-      if (profile.role === "AGENT") query = query.eq("agent_id", profile.id);
-      else if (isAuditMode && profile.role === "SUPERVISOR" && profile.team_id) query = query.eq("team_id", profile.team_id);
+      if (!canViewAll) {
+        if (profile.role === "AGENT") query = query.eq("agent_id", profile.id);
+        else if (isAuditMode && profile.role === "SUPERVISOR" && profile.team_id) query = query.eq("team_id", profile.team_id);
+      }
       return query;
     };
     // Activities are only rendered as recent history, so they stay on a single
     // capped query — paginating them would pull tens of thousands of rows.
     let activitiesQuery = supabase.from("activities").select("*").order("created_at", { ascending: false }).limit(1000);
-    if (profile.role === "AGENT") activitiesQuery = activitiesQuery.eq("user_id", profile.id);
+    if (!canViewAll && profile.role === "AGENT") activitiesQuery = activitiesQuery.eq("user_id", profile.id);
 
     const [dealResult, leadResult, activityResult, profileResult] = await Promise.all([
       fetchAllRows<Deal>(buildDealsQuery),
@@ -163,7 +167,7 @@ export const NegociacionesKanban = () => {
       setAgents((profileResult.data ?? []) as Profile[]);
     }
     if (showLoader) setLoading(false);
-  }, [isAuditMode, profile]);
+  }, [isAuditMode, profile, canViewAll]);
 
   useEffect(() => {
     void fetchData();
@@ -194,7 +198,7 @@ export const NegociacionesKanban = () => {
     if (agent.role !== "AGENT") return false;
     if (isSuperAdmin) return true;
     if (isManager) return agent.department === profile?.department;
-    if (isSupervisor) return Boolean(profile?.team_id && agent.team_id === profile.team_id);
+    if (isSupervisor) return profile?.team_id ? agent.team_id === profile.team_id : agent.department === profile?.department;
     return agent.id === profile?.id;
   }), [agents, isManager, isSuperAdmin, isSupervisor, profile?.department, profile?.id, profile?.team_id]);
 

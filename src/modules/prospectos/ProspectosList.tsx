@@ -165,7 +165,7 @@ export const ProspectosList = () => {
           if (agent.role !== "AGENT") return false;
           if (isSuperAdmin) return true;
           if (isManager) return agent.department === profile?.department;
-          if (isSupervisor) return Boolean(profile?.team_id && agent.team_id === profile.team_id);
+          if (isSupervisor) return profile?.team_id ? agent.team_id === profile.team_id : agent.department === profile?.department;
           return agent.id === profile?.id;
         });
         setAgents(scopedAgents);
@@ -972,6 +972,23 @@ export const ProspectosList = () => {
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const { error } = await supabase.from('leads').update({ in_call_queue: true }).eq('id', selectedLead.id);
+                    if (!error) {
+                      setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, in_call_queue: true } : l));
+                      setSelectedLead({ ...selectedLead, in_call_queue: true });
+                      alert("Agregado a la cola de llamadas.");
+                    } else {
+                      alert("Error al agregar a la cola.");
+                    }
+                  }}
+                  className="gold-button-secondary min-h-9 rounded-lg px-3 text-xs font-bold"
+                  disabled={selectedLead.in_call_queue}
+                >
+                  {selectedLead.in_call_queue ? "📞 En cola" : "📞 Mandar a cola"}
+                </button>
                 {linkedDealId && (
                   <button
                     type="button"

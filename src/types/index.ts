@@ -58,6 +58,7 @@ export interface Lead {
   raw_data?: Record<string, unknown>;
   agent_id?: string | null;
   team_id?: string | null;
+  in_call_queue?: boolean;
   created_by?: string | null;
   is_burned?: boolean;
   burned_at?: string | null;

@@ -22,6 +22,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { CopyableField } from "@/components/ui/CopyableField";
 import { ComplianceChecklist } from "./ComplianceChecklist";
 import { openAttachment } from "@/lib/attachments";
+import { supabase } from "@/lib/supabase";
 import type { Activity, Deal, FileAttachment, Lead, Note, Profile } from "@/types";
 import { CONTACT_OUTCOME_CONFIG, PIPELINE_STAGES, STAGE_CONFIG, formatCurrency, isPipelineStage, type PipelineStage } from "./pipeline";
 
@@ -152,6 +153,24 @@ export const DealWorkspaceSheet = ({
                   title="Elimina los expedientes de Cumplimiento y Retención y devuelve la cuenta al inicio de Ventas"
                 >
                   <RotateCcw /> Regresar al inicio
+                </Button>
+              )}
+              {lead && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    const { error } = await supabase.from('leads').update({ in_call_queue: true }).eq('id', lead.id);
+                    if (!error) {
+                      alert("Agregado a la cola de llamadas.");
+                    } else {
+                      alert("Error al agregar a la cola.");
+                    }
+                  }}
+                  disabled={lead.in_call_queue}
+                  className="gold-button-secondary text-xs"
+                >
+                  {lead.in_call_queue ? "📞 En cola" : "📞 Mandar a cola"}
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={() => onEdit(deal)}>Editar negociación</Button>
