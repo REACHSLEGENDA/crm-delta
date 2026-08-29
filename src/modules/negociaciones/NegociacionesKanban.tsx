@@ -113,7 +113,13 @@ export const NegociacionesKanban = () => {
     setSelectedDealId(target.id);
     setWorkspaceOpen(true);
     void (async () => {
-      const { data } = await supabase.from("notes").select("*").eq("deal_id", target.id).order("created_at", { ascending: false });
+      let q = supabase.from("notes").select("*");
+      if (target.lead_id) {
+        q = q.or(`deal_id.eq.${target.id},lead_id.eq.${target.lead_id}`);
+      } else {
+        q = q.eq("deal_id", target.id);
+      }
+      const { data } = await q.order("created_at", { ascending: false });
       setNotes((data ?? []) as Note[]);
     })();
     searchParams.delete("deal");
@@ -246,7 +252,9 @@ export const NegociacionesKanban = () => {
   const selectedDeal = useMemo(() => activeDeals.find((deal) => deal.id === selectedDealId) ?? null, [activeDeals, selectedDealId]);
   const selectedLead = selectedDeal?.lead_id ? activeLeads.find((lead) => lead.id === selectedDeal.lead_id) : undefined;
   const selectedAgent = selectedDeal?.agent_id ? agents.find((agent) => agent.id === selectedDeal.agent_id) : undefined;
-  const selectedActivities = activities.filter((activity) => activity.deal_id === selectedDealId);
+  const selectedActivities = activities.filter(
+    (activity) => activity.deal_id === selectedDealId || (selectedDeal?.lead_id && activity.lead_id === selectedDeal.lead_id)
+  );
 
   const metrics = useMemo(() => {
     const active = activeDeals.filter((deal) => ACTIVE_STAGES.some((stage) => stage === deal.stage));
@@ -280,7 +288,13 @@ export const NegociacionesKanban = () => {
   const openDeal = async (deal: Deal) => {
     setSelectedDealId(deal.id);
     setWorkspaceOpen(true);
-    const { data } = await supabase.from("notes").select("*").eq("deal_id", deal.id).order("created_at", { ascending: false });
+    let q = supabase.from("notes").select("*");
+    if (deal.lead_id) {
+      q = q.or(`deal_id.eq.${deal.id},lead_id.eq.${deal.lead_id}`);
+    } else {
+      q = q.eq("deal_id", deal.id);
+    }
+    const { data } = await q.order("created_at", { ascending: false });
     setNotes((data ?? []) as Note[]);
   };
 
