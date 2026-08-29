@@ -73,6 +73,7 @@ export const NegociacionesKanban = () => {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState(isAuditMode ? profile?.id || "" : "");
+  const [sortBy, setSortBy] = useState<"updated_desc" | "updated_asc" | "created_desc">("updated_desc");
   const [dragOverStage, setDragOverStage] = useState<PipelineStage | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
@@ -204,14 +205,31 @@ export const NegociacionesKanban = () => {
 
   const filteredDeals = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return activeDeals.filter((deal) => {
+    const result = activeDeals.filter((deal) => {
       if (stageFilter && deal.stage !== stageFilter) return false;
       if (agentFilter && deal.agent_id !== agentFilter) return false;
       if (!term) return true;
       const lead = activeLeads.find((item) => item.id === deal.lead_id);
       return `${deal.name} ${lead?.first_name ?? ""} ${lead?.last_name ?? ""} ${lead?.email ?? ""} ${lead?.phone ?? ""}`.toLowerCase().includes(term);
     });
-  }, [activeDeals, activeLeads, agentFilter, search, stageFilter]);
+
+    result.sort((a, b) => {
+      if (sortBy === "created_desc") {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      } else if (sortBy === "updated_desc") {
+        const aDate = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+        const bDate = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+        return bDate - aDate;
+      } else if (sortBy === "updated_asc") {
+        const aDate = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+        const bDate = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+        return aDate - bDate;
+      }
+      return 0;
+    });
+
+    return result;
+  }, [activeDeals, activeLeads, agentFilter, search, stageFilter, sortBy]);
 
   const leadsWithoutDeal = useMemo(() => {
     const linkedIds = new Set(activeDeals.map((deal) => deal.lead_id).filter(Boolean));
@@ -531,10 +549,15 @@ export const NegociacionesKanban = () => {
         ))}
       </div>
 
-      <div className="surface-card grid gap-3 p-3 lg:grid-cols-[minmax(240px,1fr)_180px_200px_auto]">
+      <div className="surface-card grid gap-3 p-3 lg:grid-cols-[minmax(240px,1fr)_180px_200px_200px_auto]">
         <label className="relative"><span className="sr-only">Buscar negociación</span><Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar negociación, prospecto, teléfono…" className="h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /></label>
         <select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)} aria-label="Filtrar por etapa" className="h-11 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="">Todas las etapas</option>{pipelineStages.map((stage) => <option key={stage} value={stage}>{stage}</option>)}</select>
         <select value={agentFilter} onChange={(event) => setAgentFilter(event.target.value)} aria-label="Filtrar por agente" className="h-11 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="">Todos los agentes</option>{eligibleAgents.map((agent) => <option key={agent.id} value={agent.id}>{agent.first_name} {agent.last_name}</option>)}</select>
+        <select value={sortBy} onChange={(event) => setSortBy(event.target.value as any)} aria-label="Ordenar por" className="h-11 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <option value="created_desc">Más recientes primero</option>
+          <option value="updated_desc">Actividad más reciente</option>
+          <option value="updated_asc">Sin actividad hace más tiempo</option>
+        </select>
         <button type="button" onClick={clearFilters} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold hover:bg-accent"><FilterX className="h-4 w-4" /> Limpiar</button>
       </div>
 

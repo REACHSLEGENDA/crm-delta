@@ -23,6 +23,7 @@ import {
   type PipelineStage,
 } from "./pipeline";
 import { stageMeta } from "./pipelines";
+import { relativeTime, clockTime } from "@/lib/relativeTime";
 
 type OutcomeValue = NonNullable<Lead["contact_outcome"]>;
 type OutcomeChangeHandler = (lead: Lead, outcome: OutcomeValue) => void;
@@ -191,6 +192,10 @@ export const KanbanView = ({
                         <span className="italic text-muted-foreground/60">Sin prospecto</span>
                       )}
                     </div>
+                    <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground/80">
+                      <Clock3 className="h-3 w-3 shrink-0" />
+                      <span>{relativeTime(deal.updated_at)}</span>
+                    </div>
                     <div className="mt-1.5 flex shrink-0 justify-end gap-1 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                       <button
                         type="button"
@@ -307,7 +312,10 @@ export const DealsListView = ({ deals, leads, onOpenDeal, onEditDeal, onDeleteDe
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right font-semibold tabular-nums">{formatCurrency(deal.value, deal.currency)}</td>
-                <td className="px-4 py-3 text-sm text-muted-foreground">{new Date(deal.updated_at).toLocaleDateString("es-MX")}</td>
+                <td className="px-4 py-3 text-[11px] text-muted-foreground">
+                  <span className="block">{relativeTime(deal.updated_at)}</span>
+                  <span className="block font-semibold">{clockTime(deal.updated_at)}</span>
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-1">
                     <button type="button" onClick={() => onOpenDeal(deal)} className="app-icon-button" aria-label={`Ver ${deal.name}`}><Eye className="h-4 w-4" /></button>
