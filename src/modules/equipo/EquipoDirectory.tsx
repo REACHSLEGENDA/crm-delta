@@ -127,7 +127,7 @@ export const EquipoDirectory = () => {
       department: team.department ?? currentProfile?.department ?? "Ventas",
       leaderId: team.leader_id ?? "",
       memberIds: profiles
-        .filter((person) => person.team_id === team.id && person.id !== team.leader_id && person.role === "AGENT")
+        .filter((person) => person.team_id === team.id && person.id !== team.leader_id && person.role !== "SUPERADMIN")
         .map((person) => person.id),
       active: team.active !== false,
     });
@@ -169,7 +169,8 @@ export const EquipoDirectory = () => {
   const memberCandidates = profiles.filter(
     (person) =>
       person.department === teamForm.department &&
-      person.role === "AGENT" &&
+      person.role !== "SUPERADMIN" &&
+      person.id !== teamForm.leaderId &&
       (!person.team_id || person.team_id === teamForm.id),
   );
 
@@ -245,7 +246,7 @@ export const EquipoDirectory = () => {
                             <h3 className="font-semibold text-foreground">{team.name}</h3>
                             {!team.active && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">Inactivo</span>}
                           </div>
-                          <p className="mt-1 text-xs text-muted-foreground">{team.department ? DEPARTMENT_LABELS[team.department] : "Sin departamento"} · {members.length} agentes</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{team.department ? DEPARTMENT_LABELS[team.department] : "Sin departamento"} · {members.length} colaboradores</p>
                         </div>
                         {canConfigure && (
                           <button type="button" onClick={() => openEditTeam(team)} className="app-icon-button h-11 w-11" aria-label={`Editar ${team.name}`}>
@@ -342,9 +343,9 @@ export const EquipoDirectory = () => {
               </select>
             </label>
             <fieldset className="grid gap-2 sm:col-span-2">
-              <legend className="text-sm font-medium text-foreground">Agentes a su mando</legend>
+              <legend className="text-sm font-medium text-foreground">Colaboradores asignados (agentes y co-líderes)</legend>
               <div className="grid max-h-56 gap-2 overflow-y-auto rounded-lg border border-border p-3 sm:grid-cols-2">
-                {memberCandidates.length === 0 ? <p className="text-sm text-muted-foreground">No hay agentes disponibles en este departamento.</p> : memberCandidates.map((person) => (
+                {memberCandidates.length === 0 ? <p className="text-sm text-muted-foreground">No hay colaboradores disponibles en este departamento.</p> : memberCandidates.map((person) => (
                   <label key={person.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 hover:bg-accent">
                     <input
                       type="checkbox"
