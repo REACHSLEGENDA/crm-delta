@@ -3,7 +3,7 @@ import { ArrowLeft, FileText, Hash, Lock, MessageSquare, Minus, Paperclip, Send,
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { getAttachmentUrl, openAttachment, removeAttachment, uploadAttachment } from "@/lib/attachments";
+import { getAttachmentUrl, isRenderableImage, openAttachment, removeAttachment, uploadAttachment, validateAttachment } from "@/lib/attachments";
 import type { Channel, FileAttachment, Message, Profile } from "@/types";
 
 const SEEN_KEY = "delta-capital-chat-seen";
@@ -39,7 +39,7 @@ const DockAttachment = ({ attachment }: { attachment: FileAttachment }) => {
   const [url, setUrl] = useState(attachment.url ?? "");
   useEffect(() => {
     let active = true;
-    if (!attachment.url && attachment.type?.startsWith("image/")) {
+    if (!attachment.url && isRenderableImage(attachment)) {
       void getAttachmentUrl(attachment)
         .then((signed) => { if (active) setUrl(signed); })
         .catch(() => undefined);
@@ -47,7 +47,7 @@ const DockAttachment = ({ attachment }: { attachment: FileAttachment }) => {
     return () => { active = false; };
   }, [attachment]);
 
-  if (url && (attachment.type?.startsWith("image/") || attachment.url)) {
+  if (url && (isRenderableImage(attachment) || attachment.url)) {
     return (
       <button type="button" onClick={() => void openAttachment(attachment)} className="block overflow-hidden rounded-lg border border-border">
         <img src={url} alt={attachment.name} className="max-h-40 w-full object-contain" loading="lazy" />
@@ -82,6 +82,7 @@ export const ChatDock = () => {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [error, setError] = useState("");
   const [unread, setUnread] = useState<Record<string, number>>({});
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -197,13 +198,15 @@ export const ChatDock = () => {
     const content = draft.trim();
     if ((!content && pendingFiles.length === 0) || !active || !profile?.id || sending || auditBlocked) return;
     setSending(true);
+    setError("");
 
     const uploaded: FileAttachment[] = [];
     try {
       for (const file of pendingFiles) uploaded.push(await uploadAttachment(file, profile.id, `chat/${active.id}`));
-    } catch {
+    } catch (uploadError) {
       // Roll back whatever made it up, so no orphan files stay in storage.
       await Promise.allSettled(uploaded.map(removeAttachment));
+      setError(uploadError instanceof Error ? uploadError.message : "No se pudo subir el archivo.");
       setSending(false);
       return;
     }
@@ -222,14 +225,23 @@ export const ChatDock = () => {
     setPendingFiles([]);
     window.setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
 
-    const { error } = await supabase
+    const { error: sendError } = await supabase
       .from("messages")
       .insert({ channel_id: active.id, user_id: profile.id, content: optimistic.content, attachments: uploaded });
     setSending(false);
-    if (error) {
+    if (sendError) {
       await Promise.allSettled(uploaded.map(removeAttachment));
       setMessages((current) => current.filter((item) => item.id !== optimistic.id));
+      setError(sendError.message);
     }
+  };
+
+  /** Accepts files from the picker and from a pasted screenshot alike. */
+  const addFiles = (incoming: File[]) => {
+    if (incoming.length === 0) return;
+    const rejected = incoming.map(validateAttachment).find(Boolean);
+    setError(rejected ?? "");
+    setPendingFiles((current) => [...current, ...incoming.filter((file) => !validateAttachment(file))]);
   };
 
   if (!profile) return null;
@@ -387,6 +399,14 @@ export const ChatDock = () => {
 
               {!auditBlocked && (
                 <form onSubmit={send} className="border-t border-border bg-card p-2">
+                  {error && (
+                    <div role="alert" className="mb-2 flex items-start justify-between gap-2 rounded-lg border border-destructive/25 bg-destructive/10 p-2 text-[11px] text-destructive">
+                      <span className="min-w-0 break-words">{error}</span>
+                      <button type="button" onClick={() => setError("")} aria-label="Cerrar aviso">
+                        <X className="h-3 w-3 shrink-0" />
+                      </button>
+                    </div>
+                  )}
                   {pendingFiles.length > 0 && (
                     <div className="mb-2 flex flex-wrap gap-1.5">
                       {pendingFiles.map((file, index) => (
@@ -413,7 +433,7 @@ export const ChatDock = () => {
                       className="sr-only"
                       accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
                       onChange={(event) => {
-                        setPendingFiles((current) => [...current, ...Array.from(event.target.files ?? [])]);
+                        addFiles(Array.from(event.target.files ?? []));
                         event.target.value = "";
                       }}
                     />
@@ -422,6 +442,12 @@ export const ChatDock = () => {
                     rows={1}
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
+                    onPaste={(event) => {
+                      const pasted = Array.from(event.clipboardData.files);
+                      if (pasted.length === 0) return;
+                      event.preventDefault();
+                      addFiles(pasted);
+                    }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" && !event.shiftKey) {
                         event.preventDefault();

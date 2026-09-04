@@ -19,7 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { Channel, ChannelType, FileAttachment, Message, Profile } from "@/types";
-import { getAttachmentUrl, openAttachment, removeAttachment, uploadAttachment } from "@/lib/attachments";
+import { getAttachmentUrl, isRenderableImage, openAttachment, removeAttachment, uploadAttachment, validateAttachment } from "@/lib/attachments";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import {
   Dialog,
@@ -80,13 +80,13 @@ const AttachmentPreview = ({ attachment }: { attachment: FileAttachment }) => {
   const [url, setUrl] = useState(attachment.url ?? "");
   useEffect(() => {
     let active = true;
-    if (!attachment.url && attachment.type?.startsWith("image/")) {
+    if (!attachment.url && isRenderableImage(attachment)) {
       void getAttachmentUrl(attachment).then((signedUrl) => active && setUrl(signedUrl)).catch(() => undefined);
     }
     return () => { active = false; };
   }, [attachment]);
 
-  if (url && (attachment.type?.startsWith("image/") || attachment.url)) {
+  if (url && (isRenderableImage(attachment) || attachment.url)) {
     return (
       <button type="button" onClick={() => void openAttachment(attachment)} className="block overflow-hidden rounded-lg border border-border bg-muted/40">
         <img src={url} alt={attachment.name} className="max-h-56 w-full object-contain" loading="lazy" />
@@ -226,6 +226,14 @@ export const ChatInterno = () => {
     } finally {
       setSending(false);
     }
+  };
+
+  /** Accepts files from the picker and from a pasted screenshot alike. */
+  const addFiles = (incoming: File[]) => {
+    if (incoming.length === 0) return;
+    const rejected = incoming.map(validateAttachment).find(Boolean);
+    setError(rejected ?? "");
+    setPendingFiles((current) => [...current, ...incoming.filter((file) => !validateAttachment(file))]);
   };
 
   const sendSticker = async (emoji: string) => {
@@ -436,12 +444,12 @@ export const ChatInterno = () => {
                 )}
                 <div className="flex items-end gap-2">
                   <div className="flex gap-1">
-                    <label className="app-icon-button cursor-pointer" aria-label="Adjuntar archivos"><Paperclip className="h-4 w-4" /><input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="sr-only" onChange={(event) => setPendingFiles((current) => [...current, ...Array.from(event.target.files ?? [])])} /></label>
+                    <label className="app-icon-button cursor-pointer" aria-label="Adjuntar archivos"><Paperclip className="h-4 w-4" /><input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="sr-only" onChange={(event) => { addFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} /></label>
                     <button type="button" onClick={() => { setShowEmojiPicker((value) => !value); setShowStickers(false); }} className={`app-icon-button ${showEmojiPicker ? "bg-accent text-primary" : ""}`} aria-label="Agregar emoji"><Smile className="h-4 w-4" /></button>
                     <button type="button" onClick={() => { setShowStickers((value) => !value); setShowEmojiPicker(false); }} className={`app-icon-button ${showStickers ? "bg-accent text-primary" : ""}`} aria-label="Enviar sticker"><Sticker className="h-4 w-4" /></button>
                     <button type="button" onClick={() => setShowGifInput((value) => !value)} className="app-icon-button" aria-label="Agregar GIF"><ImageIcon className="h-4 w-4" /></button>
                   </div>
-                  <textarea rows={1} value={inputMessage} onChange={(event) => setInputMessage(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder={`Mensaje en ${selectedChannel.name}`} className="min-h-11 max-h-32 min-w-0 flex-1 resize-y rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                  <textarea rows={1} value={inputMessage} onChange={(event) => setInputMessage(event.target.value)} onPaste={(event) => { const pasted = Array.from(event.clipboardData.files); if (pasted.length === 0) return; event.preventDefault(); addFiles(pasted); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder={`Mensaje en ${selectedChannel.name}`} className="min-h-11 max-h-32 min-w-0 flex-1 resize-y rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
                   <button type="submit" disabled={sending || (!inputMessage.trim() && pendingFiles.length === 0 && !gifUrl.trim())} className="gold-button-primary grid h-11 w-11 shrink-0 place-items-center rounded-lg disabled:opacity-45" aria-label="Enviar mensaje"><Send className="h-4 w-4" /></button>
                 </div>
               </form>}

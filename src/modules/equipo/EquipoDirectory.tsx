@@ -86,8 +86,6 @@ export const EquipoDirectory = () => {
     void fetchDirectory();
   }, [fetchDirectory]);
 
-  const profileMap = useMemo(() => new Map(profiles.map((person) => [person.id, person])), [profiles]);
-
   const visibleTeams = useMemo(() => {
     const managerDepartment = isManager ? currentProfile?.department : undefined;
     return teams.filter((team) => {
