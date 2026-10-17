@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -31,6 +31,12 @@ export const ProspectosList = () => {
   const { isAgent, isSupervisor, isManager, isSuperAdmin, canDelete, isRetention, isCompliance, canViewAll, canAssignLeads, isAuditMode, auditBlocked, isRealSuperAdmin } = usePermissions();
   
   const [leads, setLeads] = useState<Lead[]>([]);
+  /**
+   * Row order held still while a prospect panel is open. Saving a lead bumps its
+   * updated_at, so any refetch under an activity-based sort reshuffles the list
+   * under the agent working through it. The panel pins the order it opened with.
+   */
+  const frozenOrderRef = useRef<string[] | null>(null);
   const [agents, setAgents] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -127,7 +133,18 @@ export const ProspectosList = () => {
 
       const { data, error, count } = await query;
       if (!error && data) {
-        setLeads(data as Lead[]);
+        const rows = data as Lead[];
+        const frozen = frozenOrderRef.current;
+        if (frozen) {
+          const rankOf = (lead: Lead) => {
+            const rank = frozen.indexOf(lead.id);
+            return rank === -1 ? Number.MAX_SAFE_INTEGER : rank;
+          };
+          // Rows that were not on screen when the panel opened keep server order
+          // at the end -- Array.prototype.sort is stable.
+          rows.sort((left, right) => rankOf(left) - rankOf(right));
+        }
+        setLeads(rows);
         setTotalLeadCount(count ?? data.length);
       } else if (error) {
         console.error("Error al obtener leads (db):", error);
@@ -183,6 +200,12 @@ export const ProspectosList = () => {
     profile?.team_id,
   ]);
 
+  // Re-sorting, filtering, searching or paging is a deliberate act, so it
+  // releases the pinned order before the refetch lands.
+  useEffect(() => {
+    frozenOrderRef.current = null;
+  }, [sortBy, filterStatus, filterAgent, filterSource, filterCountry, filterContactOutcome, deferredSearch, currentPage, pageSize]);
+
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
@@ -191,8 +214,45 @@ export const ProspectosList = () => {
     if (profile) fetchAgents();
   }, [fetchAgents, profile]);
 
+  // Walking the base one prospect at a time: agents lost their place every time
+  // they closed the panel to pick the next name, so the panel moves on its own.
+  const [pendingJump, setPendingJump] = useState<"first" | "last" | null>(null);
+  const currentLeadIndex = selectedLead ? leads.findIndex((item) => item.id === selectedLead.id) : -1;
+  const absoluteLeadPosition = currentLeadIndex >= 0 ? (currentPage - 1) * pageSize + currentLeadIndex + 1 : 0;
+  const hasPreviousLead = currentLeadIndex > 0 || currentPage > 1;
+  const lastPage = Math.max(1, Math.ceil(totalLeadCount / pageSize));
+  const hasNextLead = (currentLeadIndex >= 0 && currentLeadIndex < leads.length - 1) || currentPage < lastPage;
+
+  const goToAdjacentLead = (step: 1 | -1) => {
+    if (currentLeadIndex === -1) return;
+    const target = currentLeadIndex + step;
+    if (target >= 0 && target < leads.length) {
+      void handleOpenLeadDetails(leads[target]);
+      return;
+    }
+    // Past the edge of the page: pull the neighbouring page and land on its edge.
+    if (step === 1 && currentPage < lastPage) {
+      setPendingJump("first");
+      setCurrentPage((page) => page + 1);
+    } else if (step === -1 && currentPage > 1) {
+      setPendingJump("last");
+      setCurrentPage((page) => page - 1);
+    }
+  };
+
+  useEffect(() => {
+    if (!pendingJump || leads.length === 0) return;
+    const target = pendingJump === "first" ? leads[0] : leads[leads.length - 1];
+    setPendingJump(null);
+    void handleOpenLeadDetails(target);
+    // handleOpenLeadDetails is recreated every render; the jump is keyed off the
+    // freshly loaded page instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leads, pendingJump]);
+
   // Handle drawer load detail
   const handleOpenLeadDetails = async (lead: Lead) => {
+    if (!frozenOrderRef.current) frozenOrderRef.current = leads.map((item) => item.id);
     setSelectedLead(lead);
     setIsDrawerOpen(true);
     
@@ -972,7 +1032,38 @@ export const ProspectosList = () => {
                   )}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => goToAdjacentLead(-1)}
+                    disabled={!hasPreviousLead}
+                    title="Prospecto anterior"
+                    className="app-icon-button h-8 w-8 disabled:opacity-30"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="font-mono-numbers px-1.5 text-[11px] text-muted-foreground">
+                    {absoluteLeadPosition} / {totalLeadCount}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => goToAdjacentLead(1)}
+                    disabled={!hasNextLead}
+                    title="Siguiente prospecto"
+                    className="app-icon-button h-8 w-8 disabled:opacity-30"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => goToAdjacentLead(1)}
+                  disabled={!hasNextLead}
+                  className="gold-button-primary min-h-9 rounded-lg px-3 text-xs font-bold disabled:opacity-40"
+                >
+                  Siguiente prospecto
+                </button>
                 <button
                   type="button"
                   onClick={async () => {
@@ -999,7 +1090,7 @@ export const ProspectosList = () => {
                     Abrir negociación
                   </button>
                 )}
-                <button onClick={() => setIsDrawerOpen(false)} className="app-icon-button" aria-label="Cerrar detalle del prospecto">
+                <button onClick={() => { frozenOrderRef.current = null; setIsDrawerOpen(false); void fetchLeads(); }} className="app-icon-button" aria-label="Cerrar detalle del prospecto">
                   <X className="h-5 w-5" />
                 </button>
               </div>
