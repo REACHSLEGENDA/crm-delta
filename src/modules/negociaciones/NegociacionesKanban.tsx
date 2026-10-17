@@ -298,6 +298,16 @@ export const NegociacionesKanban = () => {
     setNotes((data ?? []) as Note[]);
   };
 
+  // Position within the board as it is currently filtered, so the arrows walk
+  // the same deals the agent sees rather than the whole pipeline.
+  const workspaceIndex = filteredDeals.findIndex((item) => item.id === selectedDealId);
+
+  const goToAdjacentDeal = (step: 1 | -1) => {
+    const target = workspaceIndex + step;
+    if (target < 0 || target >= filteredDeals.length) return;
+    void openDeal(filteredDeals[target]);
+  };
+
   const openCreateDeal = (lead: Lead | null = null) => {
     if (!canMutate) return;
     setEditingDeal(null); setPreferredLead(lead); setDealFormOpen(true);
@@ -587,7 +597,7 @@ export const NegociacionesKanban = () => {
       {viewMode === "activities" && <ActivitiesView activities={scheduledActivities} deals={activeDeals} onOpenDeal={(deal) => void openDeal(deal)} onComplete={(activity) => void completeActivity(activity)} onPostpone={setPostponingActivity} onDelete={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManage={(activity) => canMutate && activity.user_id === profile?.id} />}
       {viewMode === "calendar" && <CalendarView activities={scheduledActivities} deals={activeDeals} month={calendarMonth} onMonthChange={setCalendarMonth} onOpenDeal={(deal) => void openDeal(deal)} />}
 
-      <DealWorkspaceSheet open={workspaceOpen} deal={selectedDeal} lead={selectedLead} agent={selectedAgent} activities={selectedActivities} notes={notes} saving={saving} onOpenChange={setWorkspaceOpen} onStageChange={(stage) => selectedDeal && requestStageChange(selectedDeal, stage)} onEdit={openEditDeal} onCreateActivity={createActivity} onCompleteActivity={(activity) => void completeActivity(activity)} onPostponeActivity={setPostponingActivity} onDeleteActivity={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManageActivity={(activity) => canMutate && activity.user_id === profile?.id} onCreateNote={createNote} onResetAccount={isSuperAdmin ? setResetTarget : undefined} onOutcomeChange={canMutate ? (lead, outcome) => void updateLeadOutcome(lead, outcome) : undefined} />
+      <DealWorkspaceSheet open={workspaceOpen} deal={selectedDeal} lead={selectedLead} agent={selectedAgent} activities={selectedActivities} notes={notes} saving={saving} onOpenChange={setWorkspaceOpen} onStageChange={(stage) => selectedDeal && requestStageChange(selectedDeal, stage)} onEdit={openEditDeal} onCreateActivity={createActivity} onCompleteActivity={(activity) => void completeActivity(activity)} onPostponeActivity={setPostponingActivity} onDeleteActivity={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManageActivity={(activity) => canMutate && activity.user_id === profile?.id} onCreateNote={createNote} onResetAccount={isSuperAdmin ? setResetTarget : undefined} onOutcomeChange={canMutate ? (lead, outcome) => void updateLeadOutcome(lead, outcome) : undefined} onNavigate={goToAdjacentDeal} position={workspaceIndex >= 0 ? { index: workspaceIndex + 1, total: filteredDeals.length } : undefined} />
       <DealFormDialog open={dealFormOpen} saving={saving} deal={editingDeal} preferredLead={preferredLead} leads={activeLeads} agents={eligibleAgents} defaultAgentId={isAgent ? profile?.id : undefined} onOpenChange={setDealFormOpen} onSubmit={saveDeal} />
       <CloseDealDialog open={Boolean(closeTarget)} saving={saving} deal={closingDeal} targetStage={closeTarget} onOpenChange={(open) => { if (!open) { setCloseTarget(null); setClosingDeal(null); } }} onConfirm={closeDeal} />
       <PostponeDialog open={Boolean(postponingActivity)} saving={saving} currentDueAt={postponingActivity?.due_at} onOpenChange={(open) => !open && setPostponingActivity(null)} onConfirm={postponeActivity} />

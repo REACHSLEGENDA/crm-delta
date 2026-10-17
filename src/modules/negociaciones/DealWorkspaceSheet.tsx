@@ -3,6 +3,8 @@ import {
   AlarmClock,
   CalendarClock,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Download,
   FileText,
@@ -54,6 +56,11 @@ interface DealWorkspaceSheetProps {
   onOutcomeChange?: (lead: Lead, outcome: NonNullable<Lead["contact_outcome"]>) => void;
   /** Admin-only rollback to the start of the sales pipeline. */
   onResetAccount?: (deal: Deal) => void;
+  /** Steps to the neighbouring deal in the board, so a working session never
+   *  has to go back to the list and find its place again. */
+  onNavigate?: (step: 1 | -1) => void;
+  /** 1-based spot in the filtered board, shown next to the arrows. */
+  position?: { index: number; total: number };
 }
 
 const toLocalDateTimeValue = (date: Date) => {
@@ -87,6 +94,8 @@ export const DealWorkspaceSheet = ({
   onCreateNote,
   onOutcomeChange,
   onResetAccount,
+  onNavigate,
+  position,
 }: DealWorkspaceSheetProps) => {
   const [activityDraft, setActivityDraft] = useState<ActivityDraft>({
     title: "Comunicarse con el cliente",
@@ -144,6 +153,43 @@ export const DealWorkspaceSheet = ({
               </SheetDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {onNavigate && position && (
+                <>
+                  <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onNavigate(-1)}
+                      disabled={position.index <= 1}
+                      title="Negociación anterior"
+                      className="h-8 w-8 p-0 disabled:opacity-30"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="font-mono-numbers px-1.5 text-[11px] text-muted-foreground">
+                      {position.index} / {position.total}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onNavigate(1)}
+                      disabled={position.index >= position.total}
+                      title="Siguiente negociación"
+                      className="h-8 w-8 p-0 disabled:opacity-30"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => onNavigate(1)}
+                    disabled={position.index >= position.total}
+                    className="gold-button-primary text-xs font-bold"
+                  >
+                    Siguiente
+                  </Button>
+                </>
+              )}
               {onResetAccount && (
                 <Button
                   variant="outline"
