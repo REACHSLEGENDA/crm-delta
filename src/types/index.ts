@@ -145,6 +145,11 @@ export interface Activity {
   metadata?: Record<string, unknown>;
   created_at: string;
   updated_at?: string;
+  profiles?: {
+    first_name?: string;
+    last_name?: string;
+    email: string;
+  };
 }
 
 export interface FileAttachment {
@@ -177,6 +182,11 @@ export interface Note {
   content: string;
   attachments?: FileAttachment[];
   created_at: string;
+  profiles?: {
+    first_name?: string;
+    last_name?: string;
+    email: string;
+  };
 }
 
 export interface ComplianceDocument {

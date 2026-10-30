@@ -26,6 +26,12 @@ const SORT_CONFIG: Record<SortOption, { label: string; column: string; ascending
   updated_asc: { label: "Sin actividad hace más tiempo", column: "updated_at", ascending: true },
 };
 
+/** "Rodrigo Ferreira", falling back to the email when the name is missing. */
+const authorName = (person?: { first_name?: string; last_name?: string; email?: string }) => {
+  if (!person) return "";
+  return `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim() || (person.email ?? "");
+};
+
 export const ProspectosList = () => {
   const { profile } = useAuth();
   const { isAgent, isSupervisor, isManager, isSuperAdmin, canDelete, canDeleteNotes, isRetention, isCompliance, canViewAll, canAssignLeads, isAuditMode, auditBlocked, isRealSuperAdmin } = usePermissions();
@@ -259,7 +265,7 @@ export const ProspectosList = () => {
     // Fetch activities
     const { data: actData } = await supabase
       .from("activities")
-      .select("*")
+      .select("*, profiles(first_name, last_name, email)")
       .eq("lead_id", lead.id)
       .order("created_at", { ascending: false });
     if (actData) setActivities(actData as Activity[]);
@@ -267,7 +273,7 @@ export const ProspectosList = () => {
     // Fetch notes
     const { data: noteData } = await supabase
       .from("notes")
-      .select("*")
+      .select("*, profiles(first_name, last_name, email)")
       .eq("lead_id", lead.id)
       .order("created_at", { ascending: false });
     if (noteData) setNotes(noteData as Note[]);
@@ -307,15 +313,17 @@ export const ProspectosList = () => {
     setLeads((current) => current.map((item) => (item.id === updated.id ? updated : item)));
   };
 
-  const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
+  const [historyToDelete, setHistoryToDelete] = useState<{ kind: "note" | "activity"; id: string } | null>(null);
 
-  /** Administration clearing a comment -- the attachment trigger handles files. */
-  const confirmDeleteNote = async () => {
-    if (!noteToDelete) return;
-    const { error } = await supabase.from("notes").delete().eq("id", noteToDelete);
+  /** Administration clearing a timeline entry -- comment or logged activity. */
+  const confirmDeleteHistory = async () => {
+    if (!historyToDelete) return;
+    const { kind, id } = historyToDelete;
+    const { error } = await supabase.from(kind === "note" ? "notes" : "activities").delete().eq("id", id);
     if (error) setLoadError(error.message);
-    else setNotes((current) => current.filter((note) => note.id !== noteToDelete));
-    setNoteToDelete(null);
+    else if (kind === "note") setNotes((current) => current.filter((note) => note.id !== id));
+    else setActivities((current) => current.filter((activity) => activity.id !== id));
+    setHistoryToDelete(null);
   };
 
   const [recoveryAgent, setRecoveryAgent] = useState("");
@@ -376,16 +384,10 @@ export const ProspectosList = () => {
         .single();
       
       if (!error && data) {
-        setNotes([data as Note, ...notes]);
+        setNotes([{ ...(data as Note), profiles: profile }, ...notes]);
         setNewNote("");
-
-        // Register Activity
-        await supabase.from("activities").insert({
-          lead_id: selectedLead.id,
-          user_id: profile.id,
-          description: `Nota agregada: "${newNote.slice(0, 30)}..."`,
-          type: "note",
-        });
+        // No companion activity is logged: the comment already appears in the
+        // timeline, and a second copy survived deleting the comment itself.
       }
     } catch (err) {
       console.error(err);
@@ -1260,8 +1262,8 @@ export const ProspectosList = () => {
                   </div>
                   <div className="space-y-3">
                     {[
-                      ...notes.map((note) => ({ kind: "note" as const, id: note.id, date: note.created_at, text: note.content })),
-                      ...activities.map((act) => ({ kind: "activity" as const, id: act.id, date: act.created_at, text: act.description })),
+                      ...notes.map((note) => ({ kind: "note" as const, id: note.id, date: note.created_at, text: note.content, who: authorName(note.profiles) })),
+                      ...activities.map((act) => ({ kind: "activity" as const, id: act.id, date: act.created_at, text: act.description, who: authorName(act.profiles) })),
                     ]
                       .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
                       .map((entry) => (
@@ -1277,15 +1279,18 @@ export const ProspectosList = () => {
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="whitespace-pre-wrap text-sm text-foreground">{entry.text}</p>
-                            <span className="mt-0.5 block font-mono-numbers text-[11px] text-muted-foreground">
-                              {new Date(entry.date).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}
+                            <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                              {entry.who && <span className="font-semibold text-foreground/70">{entry.who} · </span>}
+                              <span className="font-mono-numbers">
+                                {new Date(entry.date).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}
+                              </span>
                             </span>
                           </div>
-                          {entry.kind === "note" && canDeleteNotes && (
+                          {canDeleteNotes && (
                             <button
                               type="button"
-                              onClick={() => setNoteToDelete(entry.id)}
-                              title="Eliminar comentario"
+                              onClick={() => setHistoryToDelete({ kind: entry.kind, id: entry.id })}
+                              title={entry.kind === "note" ? "Eliminar comentario" : "Eliminar registro del historial"}
                               className="app-icon-button h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -1520,11 +1525,11 @@ export const ProspectosList = () => {
         onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
       />
       <ConfirmModal
-        isOpen={noteToDelete !== null}
-        title="Eliminar comentario"
-        message="El comentario y sus archivos se borran para todos. No se puede deshacer."
-        onConfirm={() => void confirmDeleteNote()}
-        onCancel={() => setNoteToDelete(null)}
+        isOpen={historyToDelete !== null}
+        title={historyToDelete?.kind === "activity" ? "Eliminar del historial" : "Eliminar comentario"}
+        message="Se borra para todos y no se puede deshacer."
+        onConfirm={() => void confirmDeleteHistory()}
+        onCancel={() => setHistoryToDelete(null)}
       />
     </div>
   );

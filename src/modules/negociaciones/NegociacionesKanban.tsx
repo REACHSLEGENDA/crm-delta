@@ -113,7 +113,7 @@ export const NegociacionesKanban = () => {
     setSelectedDealId(target.id);
     setWorkspaceOpen(true);
     void (async () => {
-      let q = supabase.from("notes").select("*");
+      let q = supabase.from("notes").select("*, profiles(first_name, last_name, email)");
       if (target.lead_id) {
         q = q.or(`deal_id.eq.${target.id},lead_id.eq.${target.lead_id}`);
       } else {
@@ -288,7 +288,7 @@ export const NegociacionesKanban = () => {
   const openDeal = async (deal: Deal) => {
     setSelectedDealId(deal.id);
     setWorkspaceOpen(true);
-    let q = supabase.from("notes").select("*");
+    let q = supabase.from("notes").select("*, profiles(first_name, last_name, email)");
     if (deal.lead_id) {
       q = q.or(`deal_id.eq.${deal.id},lead_id.eq.${deal.lead_id}`);
     } else {
@@ -478,7 +478,7 @@ export const NegociacionesKanban = () => {
     if (noteError) {
       await Promise.allSettled(uploaded.map(removeAttachment)); setSaving(false); throw noteError;
     }
-    setNotes((current) => [data as Note, ...current]); setSaving(false);
+    setNotes((current) => [{ ...(data as Note), profiles: profile }, ...current]); setSaving(false);
   };
 
   const confirmDelete = async () => {

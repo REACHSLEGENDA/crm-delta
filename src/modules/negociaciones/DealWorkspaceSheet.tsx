@@ -460,6 +460,13 @@ const ActivityTimelineItem = ({ activity, onComplete, onPostpone, onDelete, mana
   );
 };
 
+/** "Rodrigo Ferreira", falling back to the email when the name is missing. */
+const noteAuthor = (note: Note) => {
+  const person = note.profiles;
+  if (!person) return "";
+  return `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim() || (person.email ?? "");
+};
+
 const NoteTimelineItem = ({ note, onDelete }: { note: Note; onDelete?: (note: Note) => void }) => (
   <article className="rounded-xl border border-border bg-card p-4">
     <div className="flex items-start gap-3">
@@ -479,7 +486,10 @@ const NoteTimelineItem = ({ note, onDelete }: { note: Note; onDelete?: (note: No
             </Button>
           )}
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">{new Date(note.created_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {noteAuthor(note) && <span className="font-semibold text-foreground/70">{noteAuthor(note)} · </span>}
+          {new Date(note.created_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}
+        </p>
         {note.attachments && note.attachments.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {note.attachments.map((attachment: FileAttachment) => (
