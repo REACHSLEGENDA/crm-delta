@@ -42,6 +42,10 @@ export const usePermissions = () => {
     // Solo ADMIN puede eliminar registros
     canDelete: !auditBlocked && (isSuperAdmin || isRealSuperAdmin),
 
+    // Borrar comentarios — ADMIN y Gerente (los agentes no borran ni los suyos,
+    // para que el historial de una cuenta trabajada no se pueda vaciar)
+    canDeleteNotes: !auditBlocked && (isSuperAdmin || isManager),
+
     // Exportar datos — solo ADMIN
     canExport: !auditBlocked && (isSuperAdmin || isRealSuperAdmin),
 

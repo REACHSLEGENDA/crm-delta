@@ -28,7 +28,7 @@ const SORT_CONFIG: Record<SortOption, { label: string; column: string; ascending
 
 export const ProspectosList = () => {
   const { profile } = useAuth();
-  const { isAgent, isSupervisor, isManager, isSuperAdmin, canDelete, isRetention, isCompliance, canViewAll, canAssignLeads, isAuditMode, auditBlocked, isRealSuperAdmin } = usePermissions();
+  const { isAgent, isSupervisor, isManager, isSuperAdmin, canDelete, canDeleteNotes, isRetention, isCompliance, canViewAll, canAssignLeads, isAuditMode, auditBlocked, isRealSuperAdmin } = usePermissions();
   
   const [leads, setLeads] = useState<Lead[]>([]);
   /**
@@ -305,6 +305,17 @@ export const ProspectosList = () => {
     const updated = data as Lead;
     setSelectedLead(updated);
     setLeads((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+  };
+
+  const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
+
+  /** Administration clearing a comment -- the attachment trigger handles files. */
+  const confirmDeleteNote = async () => {
+    if (!noteToDelete) return;
+    const { error } = await supabase.from("notes").delete().eq("id", noteToDelete);
+    if (error) setLoadError(error.message);
+    else setNotes((current) => current.filter((note) => note.id !== noteToDelete));
+    setNoteToDelete(null);
   };
 
   const [recoveryAgent, setRecoveryAgent] = useState("");
@@ -1249,12 +1260,12 @@ export const ProspectosList = () => {
                   </div>
                   <div className="space-y-3">
                     {[
-                      ...notes.map((note) => ({ kind: "note" as const, date: note.created_at, text: note.content })),
-                      ...activities.map((act) => ({ kind: "activity" as const, date: act.created_at, text: act.description })),
+                      ...notes.map((note) => ({ kind: "note" as const, id: note.id, date: note.created_at, text: note.content })),
+                      ...activities.map((act) => ({ kind: "activity" as const, id: act.id, date: act.created_at, text: act.description })),
                     ]
                       .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
-                      .map((entry, index) => (
-                        <div key={`${entry.kind}-${index}`} className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
+                      .map((entry) => (
+                        <div key={`${entry.kind}-${entry.id}`} className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
                           <span
                             className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg"
                             style={{
@@ -1264,12 +1275,22 @@ export const ProspectosList = () => {
                           >
                             {entry.kind === "note" ? <MessageSquare className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                           </span>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="whitespace-pre-wrap text-sm text-foreground">{entry.text}</p>
                             <span className="mt-0.5 block font-mono-numbers text-[11px] text-muted-foreground">
                               {new Date(entry.date).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}
                             </span>
                           </div>
+                          {entry.kind === "note" && canDeleteNotes && (
+                            <button
+                              type="button"
+                              onClick={() => setNoteToDelete(entry.id)}
+                              title="Eliminar comentario"
+                              className="app-icon-button h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                       ))}
                     {notes.length === 0 && activities.length === 0 && (
@@ -1497,6 +1518,13 @@ export const ProspectosList = () => {
         message={`¿Estás seguro de que deseas eliminar a "${confirmModal.targetName}"? Esta acción borrará todas sus notas e historial y no se puede deshacer.`}
         onConfirm={confirmDeleteLead}
         onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+      />
+      <ConfirmModal
+        isOpen={noteToDelete !== null}
+        title="Eliminar comentario"
+        message="El comentario y sus archivos se borran para todos. No se puede deshacer."
+        onConfirm={() => void confirmDeleteNote()}
+        onCancel={() => setNoteToDelete(null)}
       />
     </div>
   );

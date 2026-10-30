@@ -56,6 +56,8 @@ interface DealWorkspaceSheetProps {
   onOutcomeChange?: (lead: Lead, outcome: NonNullable<Lead["contact_outcome"]>) => void;
   /** Admin-only rollback to the start of the sales pipeline. */
   onResetAccount?: (deal: Deal) => void;
+  /** Administration can remove a comment; agents never can. */
+  onDeleteNote?: (note: Note) => void;
   /** Steps to the neighbouring deal in the board, so a working session never
    *  has to go back to the list and find its place again. */
   onNavigate?: (step: 1 | -1) => void;
@@ -94,6 +96,7 @@ export const DealWorkspaceSheet = ({
   onCreateNote,
   onOutcomeChange,
   onResetAccount,
+  onDeleteNote,
   onNavigate,
   position,
 }: DealWorkspaceSheetProps) => {
@@ -423,7 +426,7 @@ export const DealWorkspaceSheet = ({
               {timeline.map((entry) => entry.kind === "activity" ? (
                 <ActivityTimelineItem key={`activity-${entry.item.id}`} activity={entry.item} onComplete={onCompleteActivity} onPostpone={onPostponeActivity} onDelete={onDeleteActivity} manageable={canManageActivity(entry.item)} />
               ) : (
-                <NoteTimelineItem key={`note-${entry.item.id}`} note={entry.item} />
+                <NoteTimelineItem key={`note-${entry.item.id}`} note={entry.item} onDelete={onDeleteNote} />
               ))}
             </div>
           </section>
@@ -457,12 +460,25 @@ const ActivityTimelineItem = ({ activity, onComplete, onPostpone, onDelete, mana
   );
 };
 
-const NoteTimelineItem = ({ note }: { note: Note }) => (
+const NoteTimelineItem = ({ note, onDelete }: { note: Note; onDelete?: (note: Note) => void }) => (
   <article className="rounded-xl border border-border bg-card p-4">
     <div className="flex items-start gap-3">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground"><MessageSquareText className="h-4 w-4" /></span>
       <div className="min-w-0 flex-1">
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">{note.content}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="min-w-0 flex-1 whitespace-pre-wrap text-sm leading-relaxed">{note.content}</p>
+          {onDelete && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onDelete(note)}
+              title="Eliminar comentario"
+              className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
         <p className="mt-2 text-xs text-muted-foreground">{new Date(note.created_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</p>
         {note.attachments && note.attachments.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
