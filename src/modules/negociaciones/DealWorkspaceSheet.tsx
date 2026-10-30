@@ -58,6 +58,8 @@ interface DealWorkspaceSheetProps {
   onResetAccount?: (deal: Deal) => void;
   /** Administration can remove a comment; agents never can. */
   onDeleteNote?: (note: Note) => void;
+  /** Administration wiping the whole timeline of this deal in one pass. */
+  onClearHistory?: () => void;
   /** Steps to the neighbouring deal in the board, so a working session never
    *  has to go back to the list and find its place again. */
   onNavigate?: (step: 1 | -1) => void;
@@ -97,6 +99,7 @@ export const DealWorkspaceSheet = ({
   onOutcomeChange,
   onResetAccount,
   onDeleteNote,
+  onClearHistory,
   onNavigate,
   position,
 }: DealWorkspaceSheetProps) => {
@@ -419,6 +422,16 @@ export const DealWorkspaceSheet = ({
               <div className="h-px flex-1 bg-border" />
               <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Historial</span>
               <div className="h-px flex-1 bg-border" />
+              {onClearHistory && timeline.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onClearHistory}
+                  className="h-7 shrink-0 border-destructive/30 px-2.5 text-[10px] font-bold uppercase tracking-wider text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  Borrar historial
+                </Button>
+              )}
             </div>
 
             <div className="space-y-3">

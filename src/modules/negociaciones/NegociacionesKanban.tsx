@@ -14,7 +14,7 @@ import { ACTIVE_STAGES, CONTACT_OUTCOME_CONFIG, formatCurrency, type PipelineSta
 import { PIPELINE_CONFIG, RECOVERY_STAGES, isRecoveryStage, stagesForPipeline, visiblePipelines, type DealPipeline } from "./pipelines";
 
 type ViewMode = "kanban" | "list" | "activities" | "calendar";
-interface ConfirmTarget { type: "deal" | "activity" | "note"; id: string; name: string; }
+interface ConfirmTarget { type: "deal" | "activity" | "note" | "history"; id: string; name: string; }
 
 const VIEW_KEY = "delta-capital-pipeline-view";
 const PIPELINE_KEY = "delta-capital-active-pipeline";
@@ -483,11 +483,29 @@ export const NegociacionesKanban = () => {
 
   const confirmDelete = async () => {
     if (!confirmTarget) return;
-    if (confirmTarget.type === "deal" ? !canMutate : !(canDeleteNotes || canMutate)) return;
+    if (confirmTarget.type === "deal") { if (!canMutate) return; }
+    else if (confirmTarget.type === "history") { if (!canDeleteNotes) return; }
+    else if (!(canDeleteNotes || canMutate)) return;
     if (confirmTarget.type === "deal") {
       const { error: deleteError } = await supabase.from("deals").delete().eq("id", confirmTarget.id);
       if (deleteError) setError(deleteError.message);
       else { setDeals((current) => current.filter((deal) => deal.id !== confirmTarget.id)); if (selectedDealId === confirmTarget.id) setWorkspaceOpen(false); }
+    } else if (confirmTarget.type === "history") {
+      // Everything attached to the deal and to the prospect behind it.
+      const scope = selectedDeal?.lead_id
+        ? `deal_id.eq.${confirmTarget.id},lead_id.eq.${selectedDeal.lead_id}`
+        : `deal_id.eq.${confirmTarget.id}`;
+      const [noteResult, activityResult] = await Promise.all([
+        supabase.from("notes").delete().or(scope),
+        supabase.from("activities").delete().or(scope),
+      ]);
+      const failure = noteResult.error || activityResult.error;
+      if (failure) setError(failure.message);
+      else {
+        setNotes([]);
+        setActivities((current) => current.filter((item) =>
+          item.deal_id !== confirmTarget.id && (!selectedDeal?.lead_id || item.lead_id !== selectedDeal.lead_id)));
+      }
     } else if (confirmTarget.type === "note") {
       // Attachments are cleaned up by the note trigger, so only the row goes.
       const { error: deleteError } = await supabase.from("notes").delete().eq("id", confirmTarget.id);
@@ -603,7 +621,7 @@ export const NegociacionesKanban = () => {
       {viewMode === "activities" && <ActivitiesView activities={scheduledActivities} deals={activeDeals} onOpenDeal={(deal) => void openDeal(deal)} onComplete={(activity) => void completeActivity(activity)} onPostpone={setPostponingActivity} onDelete={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManage={(activity) => canMutate && activity.user_id === profile?.id} />}
       {viewMode === "calendar" && <CalendarView activities={scheduledActivities} deals={activeDeals} month={calendarMonth} onMonthChange={setCalendarMonth} onOpenDeal={(deal) => void openDeal(deal)} />}
 
-      <DealWorkspaceSheet open={workspaceOpen} deal={selectedDeal} lead={selectedLead} agent={selectedAgent} activities={selectedActivities} notes={notes} saving={saving} onOpenChange={setWorkspaceOpen} onStageChange={(stage) => selectedDeal && requestStageChange(selectedDeal, stage)} onEdit={openEditDeal} onCreateActivity={createActivity} onCompleteActivity={(activity) => void completeActivity(activity)} onPostponeActivity={setPostponingActivity} onDeleteActivity={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManageActivity={(activity) => canDeleteNotes || (canMutate && activity.user_id === profile?.id)} onCreateNote={createNote} onResetAccount={isSuperAdmin ? setResetTarget : undefined} onOutcomeChange={canMutate ? (lead, outcome) => void updateLeadOutcome(lead, outcome) : undefined} onDeleteNote={canDeleteNotes ? (note) => setConfirmTarget({ type: "note", id: note.id, name: "este comentario" }) : undefined} onNavigate={goToAdjacentDeal} position={workspaceIndex >= 0 ? { index: workspaceIndex + 1, total: filteredDeals.length } : undefined} />
+      <DealWorkspaceSheet open={workspaceOpen} deal={selectedDeal} lead={selectedLead} agent={selectedAgent} activities={selectedActivities} notes={notes} saving={saving} onOpenChange={setWorkspaceOpen} onStageChange={(stage) => selectedDeal && requestStageChange(selectedDeal, stage)} onEdit={openEditDeal} onCreateActivity={createActivity} onCompleteActivity={(activity) => void completeActivity(activity)} onPostponeActivity={setPostponingActivity} onDeleteActivity={(activity) => setConfirmTarget({ type: "activity", id: activity.id, name: activity.title || activity.description })} canManageActivity={(activity) => canDeleteNotes || (canMutate && activity.user_id === profile?.id)} onCreateNote={createNote} onResetAccount={isSuperAdmin ? setResetTarget : undefined} onOutcomeChange={canMutate ? (lead, outcome) => void updateLeadOutcome(lead, outcome) : undefined} onDeleteNote={canDeleteNotes ? (note) => setConfirmTarget({ type: "note", id: note.id, name: "este comentario" }) : undefined} onClearHistory={canDeleteNotes && selectedDeal ? () => setConfirmTarget({ type: "history", id: selectedDeal.id, name: selectedDeal.name }) : undefined} onNavigate={goToAdjacentDeal} position={workspaceIndex >= 0 ? { index: workspaceIndex + 1, total: filteredDeals.length } : undefined} />
       <DealFormDialog open={dealFormOpen} saving={saving} deal={editingDeal} preferredLead={preferredLead} leads={activeLeads} agents={eligibleAgents} defaultAgentId={isAgent ? profile?.id : undefined} onOpenChange={setDealFormOpen} onSubmit={saveDeal} />
       <CloseDealDialog open={Boolean(closeTarget)} saving={saving} deal={closingDeal} targetStage={closeTarget} onOpenChange={(open) => { if (!open) { setCloseTarget(null); setClosingDeal(null); } }} onConfirm={closeDeal} />
       <PostponeDialog open={Boolean(postponingActivity)} saving={saving} currentDueAt={postponingActivity?.due_at} onOpenChange={(open) => !open && setPostponingActivity(null)} onConfirm={postponeActivity} />
@@ -614,7 +632,7 @@ export const NegociacionesKanban = () => {
         onConfirm={() => void resetAccount()}
         onCancel={() => setResetTarget(null)}
       />
-      <ConfirmModal isOpen={Boolean(confirmTarget)} title={confirmTarget?.type === "deal" ? "Eliminar negociación" : "Eliminar actividad"} message={`¿Deseas eliminar “${confirmTarget?.name ?? "este registro"}”? Esta acción no se puede deshacer.`} onConfirm={() => void confirmDelete()} onCancel={() => setConfirmTarget(null)} />
+      <ConfirmModal isOpen={Boolean(confirmTarget)} title={confirmTarget?.type === "deal" ? "Eliminar negociación" : confirmTarget?.type === "history" ? "Borrar todo el historial" : confirmTarget?.type === "note" ? "Eliminar comentario" : "Eliminar actividad"} message={confirmTarget?.type === "history" ? `Se borran todos los comentarios y registros de “${confirmTarget.name}”, incluidos los seguimientos agendados que no se hayan cumplido. No se puede deshacer.` : `¿Deseas eliminar “${confirmTarget?.name ?? "este registro"}”? Esta acción no se puede deshacer.`} onConfirm={() => void confirmDelete()} onCancel={() => setConfirmTarget(null)} />
     </section>
   );
 };

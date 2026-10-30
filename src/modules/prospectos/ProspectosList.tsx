@@ -315,6 +315,24 @@ export const ProspectosList = () => {
 
   const [historyToDelete, setHistoryToDelete] = useState<{ kind: "note" | "activity"; id: string } | null>(null);
 
+  const [clearingHistory, setClearingHistory] = useState(false);
+
+  /** Wipes every comment and logged entry of one prospect in a single pass. */
+  const confirmClearHistory = async () => {
+    if (!selectedLead) return;
+    const [noteResult, activityResult] = await Promise.all([
+      supabase.from("notes").delete().eq("lead_id", selectedLead.id),
+      supabase.from("activities").delete().eq("lead_id", selectedLead.id),
+    ]);
+    const failure = noteResult.error || activityResult.error;
+    if (failure) setLoadError(failure.message);
+    else {
+      setNotes([]);
+      setActivities([]);
+    }
+    setClearingHistory(false);
+  };
+
   /** Administration clearing a timeline entry -- comment or logged activity. */
   const confirmDeleteHistory = async () => {
     if (!historyToDelete) return;
@@ -1259,6 +1277,15 @@ export const ProspectosList = () => {
                     <span className="h-px flex-1 bg-border" />
                     <h4 className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Historial</h4>
                     <span className="h-px flex-1 bg-border" />
+                    {canDeleteNotes && notes.length + activities.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setClearingHistory(true)}
+                        className="shrink-0 rounded-lg border border-destructive/30 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-destructive transition-colors hover:bg-destructive/10"
+                      >
+                        Borrar historial
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-3">
                     {[
@@ -1530,6 +1557,13 @@ export const ProspectosList = () => {
         message="Se borra para todos y no se puede deshacer."
         onConfirm={() => void confirmDeleteHistory()}
         onCancel={() => setHistoryToDelete(null)}
+      />
+      <ConfirmModal
+        isOpen={clearingHistory}
+        title="Borrar todo el historial"
+        message={`Se borran ${notes.length} comentario(s) y ${activities.length} registro(s) de ${selectedLead?.first_name ?? ""} ${selectedLead?.last_name ?? ""}, incluidos los seguimientos agendados que no se hayan cumplido. No se puede deshacer.`}
+        onConfirm={() => void confirmClearHistory()}
+        onCancel={() => setClearingHistory(false)}
       />
     </div>
   );
