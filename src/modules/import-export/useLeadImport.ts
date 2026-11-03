@@ -260,12 +260,32 @@ export function useLeadImport() {
             .from('leads')
             .insert(payload)
             .select('id, first_name, last_name, agent_id, team_id, raw_data')
-            .then(({ data, error }) => ({ chunk, data, error }))
+            .then(({ data, error }) => ({ chunk, payload, data, error }))
         );
       }
 
       // Wait for all inserts to complete concurrently
-      const insertResults = await Promise.all(insertPromises);
+      let insertResults = await Promise.all(insertPromises);
+
+      // A chunk is one statement, so a single bad row rejects every row with
+      // it. Replay a failed chunk one row at a time: the good rows land and the
+      // import reports exactly which row was the problem.
+      const retried = await Promise.all(
+        insertResults.map(async (result) => {
+          if (!result.error || result.chunk.length === 1) return [result];
+          return Promise.all(
+            result.chunk.map(async (row, index) => {
+              const single = result.payload[index];
+              const { data, error } = await supabase
+                .from('leads')
+                .insert([single])
+                .select('id, first_name, last_name, agent_id, team_id, raw_data');
+              return { chunk: [row], payload: [single], data, error };
+            }),
+          );
+        }),
+      );
+      insertResults = retried.flat();
       
       const dealsToCreate: Array<{
         name: string;
